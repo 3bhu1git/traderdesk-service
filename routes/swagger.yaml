@@ -1,0 +1,256 @@
+openapi: 3.0.0
+info:
+  title: Dhan Market API
+  version: 1.0.0
+  description: |
+    API documentation for Dhan Market application.
+    
+    ## Authentication
+    This API requires authentication with Dhan API credentials.
+    Use the form at the top of this page to enter your Client ID and Access Token.
+    These will be stored in your browser's localStorage and used for all API requests.
+
+servers:
+  - url: http://localhost:3001
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your Dhan access token
+    clientIdAuth:
+      type: apiKey
+      in: header
+      name: client-id
+      description: Enter your Dhan client ID
+  schemas:
+    Order:
+      type: object
+      required:
+        - symbol
+        - quantity
+        - transactionType
+        - orderType
+        - productType
+        - price
+      properties:
+        symbol:
+          type: string
+          description: Trading symbol
+        quantity:
+          type: number
+          description: Number of shares
+        transactionType:
+          type: string
+          enum: [BUY, SELL]
+        orderType:
+          type: string
+          enum: [LIMIT, MARKET]
+        productType:
+          type: string
+          enum: [CNC, MIS, NRML]
+        price:
+          type: number
+          description: Order price
+    
+    Portfolio:
+      type: object
+      properties:
+        userId:
+          type: string
+        symbol:
+          type: string
+        quantity:
+          type: number
+          minimum: 0
+        averagePrice:
+          type: number
+          minimum: 0
+        status:
+          type: string
+          enum: [open, closed]
+        lastUpdated:
+          type: string
+          format: date-time
+    
+    OHLC:
+      type: object
+      properties:
+        symbol:
+          type: string
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  /api/market-data/{symbol}:
+    get:
+      security:
+        - bearerAuth: []
+        - clientIdAuth: []
+      summary: Subscribe to live market data
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stream of live market data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OHLC'
+
+  /api/market-data/{symbol}/historical:
+    get:
+      summary: Fetch historical OHLC data
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Historical OHLC data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OHLC'
+
+  /api/orders:
+    post:
+      security:
+        - bearerAuth: []
+        - clientIdAuth: []
+      summary: Place a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /api/orders/{orderId}:
+    put:
+      security:
+        - bearerAuth: []
+        - clientIdAuth: []
+      summary: Modify an existing order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '200':
+          description: Order updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+    
+    delete:
+      summary: Cancel an existing order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order cancelled successfully
+    
+    get:
+      summary: Get live status of a specific order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /api/portfolio/holdings:
+    get:
+      security:
+        - bearerAuth: []
+        - clientIdAuth: []
+      summary: Fetch user holdings
+      responses:
+        '200':
+          description: User holdings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Portfolio'
+
+  /api/portfolio/positions:
+    get:
+      security:
+        - bearerAuth: []
+        - clientIdAuth: []
+      summary: Fetch open positions
+      responses:
+        '200':
+          description: Open positions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Portfolio'

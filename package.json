@@ -1,0 +1,47 @@
+{
+  "name": "dhan-market-app",
+  "version": "1.0.0",
+  "description": "A market data application integrating with Dhan API for live and historical data, order management, and portfolio tracking.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "jest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "joi": "^17.11.0",
+    "js-yaml": "^4.1.0",
+    "mongoose": "^8.0.3",
+    "node-cron": "^3.0.3",
+    "redis": "^4.6.11",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "winston": "^3.11.0",
+    "ws": "^8.15.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "dhan",
+    "trading",
+    "market-data",
+    "portfolio",
+    "orders"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
