@@ -254,3 +254,44 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Portfolio'
+
+  /market/live/{index}:
+    get:
+      tags:
+        - Market Data
+      summary: Get live index feed
+      description: Stream live market data for specified index
+      parameters:
+        - in: path
+          name: index
+          required: true
+          schema:
+            type: string
+            enum: [nifty, banknifty, finnifty, sensex, midcap]
+          description: Index name to stream
+      responses:
+        200:
+          description: Successful operation
+          content:
+            text/event-stream:
+              schema:
+                type: object
+                properties:
+                  symbol:
+                    type: string
+                  ltp:
+                    type: number
+                  change:
+                    type: number
+                  percentChange:
+                    type: number
+                  high:
+                    type: number
+                  low:
+                    type: number
+                  volume:
+                    type: number
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error

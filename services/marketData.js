@@ -1,16 +1,19 @@
 const axios = require('axios');
-const config = require('../config/config');
-const { logger } = require('../utils/logger');
-const { OHLC } = require('../models/marketData');
-const wsService = require('./websocket');
+let { logger } = require('../utils/logger');
 
 class MarketDataService {
     constructor() {
-        this.axiosInstance = axios.create({
-            baseURL: config.dhan.baseUrl,
+        if (!process.env.CLIENT_ID || !process.env.ACCESS_TOKEN) {
+            throw new Error('CLIENT_ID and ACCESS_TOKEN must be set in .env');
+        }
+
+        this.baseUrl = 'https://api.dhan.co';
+        this.client = axios.create({
+            baseURL: this.baseUrl,
+            timeout: 10000,
             headers: {
-                'Authorization': `Bearer ${config.dhan.accessToken}`,
-                'X-Api-Key': config.dhan.apiKey,
+                'access-token': process.env.ACCESS_TOKEN,
+                'client-id': process.env.CLIENT_ID,
                 'Content-Type': 'application/json'
             }
         });
@@ -37,7 +40,7 @@ class MarketDataService {
             }
 
             // Fetch from Dhan API
-            const response = await this.axiosInstance.get('/historical-data', {
+            const response = await this.client.get('/historical-data', {
                 params: {
                     symbol,
                     timeframe,
@@ -90,7 +93,7 @@ class MarketDataService {
             wsService.subscribe(symbol);
 
             // Also fetch current price through REST API
-            const response = await this.axiosInstance.get('/quote', {
+            const response = await this.client.get('/quote', {
                 params: { symbol }
             });
 
@@ -144,7 +147,7 @@ class MarketDataService {
     // Method to get supported symbols
     async getSupportedSymbols() {
         try {
-            const response = await this.axiosInstance.get('/instruments');
+            const response = await this.client.get('/instruments');
             return response.data;
         } catch (error) {
             logger.error('Error fetching supported symbols', {

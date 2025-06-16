@@ -29,8 +29,8 @@ const rateLimiter = rateLimit({
 
 // API key validation middleware
 const validateApiKey = (req, res, next) => {
-    // Skip API key validation for portfolio routes
-    if (req.path.startsWith('/portfolio/') || req.baseUrl.includes('/portfolio')) {
+    // Skip validation for portfolio and market routes
+    if (req.path.includes('/portfolio') || req.path.includes('/market')) {
         return next();
     }
 

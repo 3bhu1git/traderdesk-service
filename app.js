@@ -10,6 +10,7 @@ let { logger } = require('./utils/logger');
 const config = require('./config/config');
 const apiRoutes = require('./routes/api');
 const portfolioRoutes = require('./routes/portfolio');
+const marketDataRoutes = require('./routes/marketData');  // Add this line
 const WebSocketService = require('./services/websocket');
 const CronService = require('./services/cron');
 
@@ -72,6 +73,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUi
 // API routes
 app.use('/api', apiRoutes);
 app.use('/api/portfolio', portfolioRoutes);
+app.use('/api/market', marketDataRoutes);  // Add this line
 
 // Global error handler
 app.use((err, req, res, next) => {

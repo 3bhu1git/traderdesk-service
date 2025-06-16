@@ -35,13 +35,21 @@ class WebSocketService {
     }
 
     buildWsUrl() {
-        const params = new URLSearchParams({
-            version: '2',
-            token: process.env.ACCESS_TOKEN,
-            clientId: process.env.CLIENT_ID,
-            authType: '2'
-        });
-        return `wss://api-feed.dhan.co?${params.toString()}`;
+        try {
+            const accessToken = getAccessToken();
+            const clientId = getClientId();
+            
+            const params = new URLSearchParams({
+                version: '2',
+                token: accessToken,
+                clientId: clientId,
+                authType: '2'
+            });
+            return `wss://api-feed.dhan.co?${params.toString()}`;
+        } catch (error) {
+            logger.error('Error building WebSocket URL:', error.message);
+            throw error;
+        }
     }
 
     connect() {

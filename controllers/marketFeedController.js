@@ -21,40 +21,25 @@ class MarketFeedController {
         };
     }
 
-    async subscribeLiveIndex(req, res) {
-        try {
-            const { index } = req.params;
-            const indexCode = this.indexMap[index.toLowerCase()];
-            
-            if (!indexCode) {
-                throw new Error('Invalid index specified');
-            }
+    subscribeLiveIndex(req, res) {
+        const { index } = req.params;
+        const indexCode = this.indexMap[index.toLowerCase()];
 
-            // Set headers for SSE
-            res.writeHead(200, {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive'
-            });
-
-            // Create callback for index updates
-            const callback = (data) => {
-                res.write(`data: ${JSON.stringify(data)}\n\n`);
-            };
-
-            // Subscribe to index
-            this.wsService.subscribe(indexCode, callback);
-
-            // Handle client disconnect
-            req.on('close', () => {
-                this.wsService.unsubscribe(indexCode, callback);
-                logger.info(`Client disconnected from ${index} feed`);
-            });
-
-        } catch (error) {
-            logger.error(`Error in live ${req.params.index} feed:`, error.message);
-            res.status(500).json({ error: error.message });
+        if (!indexCode) {
+            return res.status(400).json({ error: 'Invalid index specified' });
         }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        this.wsService.subscribe(indexCode, (data) => {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        });
+
+        req.on('close', () => {
+            logger.info(`Client disconnected from ${index} feed`);
+        });
     }
 }
 
