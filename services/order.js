@@ -1,18 +1,43 @@
 const axios = require('axios');
+let { logger } = require('../utils/logger');
+
+// Fallback logger if logger is undefined
+if (!logger) {
+    logger = {
+        info: (...args) => console.info('[INFO]', ...args),
+        error: (...args) => console.error('[ERROR]', ...args),
+        warn: (...args) => console.warn('[WARN]', ...args),
+        debug: (...args) => console.debug('[DEBUG]', ...args)
+    };
+}
+
 const config = require('../config/config');
-const { logger } = require('../utils/logger');
 const Order = require('../models/order');
+const { getAccessToken, getClientId } = require('./tokenService');
 
 class OrderService {
     constructor() {
-        this.axiosInstance = axios.create({
-            baseURL: config.dhan.baseUrl,
-            headers: {
-                'Authorization': `Bearer ${config.dhan.accessToken}`,
-                'X-Api-Key': config.dhan.apiKey,
-                'Content-Type': 'application/json'
+        try {
+            if (!process.env.CLIENT_ID || !process.env.ACCESS_TOKEN) {
+                throw new Error('CLIENT_ID and ACCESS_TOKEN must be set in .env file');
             }
-        });
+
+            this.baseUrl = 'https://api.dhan.co';
+            this.client = axios.create({
+                baseURL: this.baseUrl,
+                timeout: 10000,
+                headers: {
+                    'access-token': process.env.ACCESS_TOKEN,
+                    'client-id': process.env.CLIENT_ID,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            logger.info('Order service initialized successfully');
+        } catch (error) {
+            logger.error('Failed to initialize order service:', error.message);
+            throw error;
+        }
     }
 
     async placeOrder(orderData) {
@@ -21,7 +46,7 @@ class OrderService {
             this.validateOrderData(orderData);
 
             // Place order with Dhan API
-            const response = await this.axiosInstance.post('/orders', orderData);
+            const response = await this.client.post('/v2/orders', orderData);
 
             if (!response.data || !response.data.orderId) {
                 throw new Error('Invalid response from Dhan API');
@@ -73,7 +98,7 @@ class OrderService {
             this.validateModifications(modifications);
 
             // Send modification request to Dhan API
-            const response = await this.axiosInstance.put(`/orders/${orderId}`, modifications);
+            const response = await this.client.put(`/v2/orders/${orderId}`, modifications);
 
             if (!response.data || !response.data.success) {
                 throw new Error('Order modification failed');
@@ -108,7 +133,7 @@ class OrderService {
             }
 
             // Send cancellation request to Dhan API
-            const response = await this.axiosInstance.delete(`/orders/${orderId}`);
+            const response = await this.client.delete(`/v2/orders/${orderId}`);
 
             if (!response.data || !response.data.success) {
                 throw new Error('Order cancellation failed');
@@ -133,7 +158,7 @@ class OrderService {
     async getOrderStatus(orderId) {
         try {
             // Get status from Dhan API
-            const response = await this.axiosInstance.get(`/orders/${orderId}`);
+            const response = await this.client.get(`/v2/orders/${orderId}`);
 
             if (!response.data) {
                 throw new Error('Invalid response from Dhan API');
