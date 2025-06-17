@@ -10,15 +10,16 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "axios": "^1.6.2",
+    "axios": "^1.10.0",
+    "axios-retry": "^4.5.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "express": "^4.18.2",
-    "express-rate-limit": "^7.1.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
     "express-validator": "^7.0.1",
     "joi": "^17.11.0",
     "js-yaml": "^4.1.0",
-    "mongoose": "^8.0.3",
+    "mongoose": "^8.16.0",
     "node-cron": "^3.0.3",
     "redis": "^4.6.11",
     "swagger-jsdoc": "^6.2.8",
@@ -43,5 +44,13 @@
     "orders"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/3bhu1git/traderdesk-service.git"
+  },
+  "bugs": {
+    "url": "https://github.com/3bhu1git/traderdesk-service/issues"
+  },
+  "homepage": "https://github.com/3bhu1git/traderdesk-service#readme"
 }

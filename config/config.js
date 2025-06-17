@@ -16,7 +16,7 @@ const config = {
         }
     },
     dhan: {
-        accessToken: process.env.ACCESS_TOKEN,
+        accessToken: process.env.SECRET_KEY,
         baseUrl: 'https://api.dhan.co',
         wsUrl: process.env.WEBSOCKET_URL || 'wss://dhan-api-url.com/websocket'
     },
@@ -35,11 +35,8 @@ const config = {
 
 // Validate required configuration
 const validateConfig = () => {
-    const required = ['dhan.accessToken'];
-    const missing = required.filter(key => {
-        const value = key.split('.').reduce((obj, k) => obj && obj[k], config);
-        return !value;
-    });
+    const required = ['ACCESS_TOKEN'];
+    const missing = required.filter(key => !process.env[key]);
 
     if (missing.length > 0) {
         throw new Error(`Missing required configuration: ${missing.join(', ')}`);

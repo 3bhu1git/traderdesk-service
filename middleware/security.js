@@ -1,6 +1,6 @@
+const logger = require('../utils/logger');
 const rateLimit = require('express-rate-limit');
 const config = require('../config/config');
-let { logger } = require('../utils/logger');
 
 // Fallback logger if logger is undefined
 if (!logger) {
@@ -11,95 +11,52 @@ if (!logger) {
     };
 }
 
-// Rate limiting middleware
+// Rate limiter middleware
 const rateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later',
+    message: {
+        error: 'Too many requests, please try again later.',
+        retryAfter: 15 * 60 // 15 minutes in seconds
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
     handler: (req, res) => {
-        logger.warn('Rate limit exceeded', {
-            ip: req.ip,
-            path: req.path
+        logger.warn('Rate limit exceeded', { 
+            ip: req.ip, 
+            path: req.path 
         });
         res.status(429).json({
-            error: 'Too many requests, please try again later'
+            error: 'Too many requests, please try again later.',
+            retryAfter: 15 * 60
         });
     }
 });
 
-// API key validation middleware
+// Basic API key validation
 const validateApiKey = (req, res, next) => {
-    // Skip validation for portfolio and market routes
-    if (req.path.includes('/portfolio') || req.path.includes('/market')) {
-        return next();
-    }
-
     const apiKey = req.headers['x-api-key'];
-    if (!apiKey || apiKey !== config.dhan.apiKey) {
-        logger.warn('Invalid API key attempt', {
-            ip: req.ip,
-            path: req.path
-        });
-        return res.status(401).json({
-            error: 'Invalid API key'
-        });
+    if (!apiKey) {
+        logger.warn('API key missing');
+        return res.status(401).json({ error: 'API key required' });
     }
+    // TODO: Implement proper API key validation
     next();
 };
 
+// Basic token validation
 const validateToken = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-
-    // Allow using ACCESS_TOKEN from .env if no Authorization header is present
-    if (!authHeader && process.env.ACCESS_TOKEN) {
-        req.headers.authorization = `Bearer ${process.env.ACCESS_TOKEN}`;
+    const token = req.headers['authorization'];
+    if (!token) {
+        logger.warn('Token missing');
+        return res.status(401).json({ error: 'Token required' });
     }
-
-    const finalAuthHeader = req.headers.authorization;
-
-    if (!finalAuthHeader || !finalAuthHeader.startsWith('Bearer ')) {
-        logger.warn('Missing or invalid bearer token', {
-            ip: req.ip,
-            path: req.path
-        });
-        return res.status(401).json({
-            error: 'Authorization token required'
-        });
-    }
-
-    const token = finalAuthHeader.split(' ')[1];
-    if (token !== config.dhan.accessToken && token !== process.env.ACCESS_TOKEN) {
-        logger.warn('Invalid bearer token attempt', {
-            ip: req.ip,
-            path: req.path
-        });
-        return res.status(401).json({
-            error: 'Invalid authorization token'
-        });
-    }
-
+    // TODO: Implement proper token validation
     next();
-};
-
-// Error handling middleware
-const errorHandler = (err, req, res, next) => {
-    logger.error('Unhandled error', {
-        error: err.message,
-        stack: err.stack,
-        path: req.path,
-        method: req.method
-    });
-
-    res.status(err.status || 500).json({
-        error: process.env.NODE_ENV === 'production' 
-            ? 'An unexpected error occurred' 
-            : err.message
-    });
 };
 
 module.exports = {
-    rateLimiter,
     validateApiKey,
     validateToken,
-    errorHandler
+    rateLimiter
 };
