@@ -95,6 +95,33 @@ components:
           type: string
           format: date-time
 
+    BrokerConnection:
+      type: object
+      required:
+        - broker
+        - customer
+        - credentials
+        - enabled
+      properties:
+        broker:
+          type: string
+          description: Broker name (e.g., dhan, zerodha)
+        customer:
+          type: string
+          description: Unique name to identify the owner of this broker account
+        credentials:
+          type: object
+          description: Broker-specific credentials (e.g., clientId, accessToken for dhan)
+        enabled:
+          type: boolean
+          description: Whether this broker account is enabled for trading
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
 paths:
   /api/market-data/{symbol}:
     get:
@@ -295,3 +322,73 @@ paths:
           description: Unauthorized
         500:
           description: Internal server error
+
+  /api/brokers:
+    post:
+      summary: Add a broker account for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - broker
+                - customer
+                - credentials
+              properties:
+                broker:
+                  type: string
+                  description: Broker name (e.g., dhan)
+                customer:
+                  type: string
+                  description: Unique name for this broker account (e.g., 'my-dhan', 'wife-dhan')
+                credentials:
+                  type: object
+                  description: Broker credentials (e.g., clientId, accessToken)
+      responses:
+        '201':
+          description: Broker account added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerConnection'
+
+  /api/brokers:
+    get:
+      summary: List all broker accounts for the authenticated user
+      responses:
+        '200':
+          description: List of broker accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BrokerConnection'
+
+  /api/brokers/{brokerAccountId}:
+    patch:
+      summary: Enable or disable a broker account
+      parameters:
+        - name: brokerAccountId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Broker account updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerConnection'
