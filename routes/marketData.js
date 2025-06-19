@@ -119,8 +119,13 @@ router.post('/historical-data', async (req, res) => {
  *           format: date-time
  */
 router.get('/historical-data', async (req, res) => {
-    try {
+        try {
         const { symbol, from, to } = req.query;
+        const authHeader = req.headers['authorization'];
+        
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Authorization header missing or invalid' });
+        }
         
         if (!symbol || !from || !to) {
             return res.status(400).json({ error: 'Missing required parameters: symbol, from, to' });
@@ -202,4 +207,4 @@ router.delete('/historical-data/:symbol', async (req, res) => {
     }
 });
 
-module.exports = router; 
+module.exports = router;

@@ -1,0 +1,33 @@
+{
+  "version": "1.0.0",
+  "tag": "v1.0.0-2025-06-13T08-35-28-276Z",
+  "timestamp": "2025-06-13T08:35:28.305Z",
+  "description": "TraderDesk.ai version 1.0.0 - Complete trading platform with market intelligence",
+  "features": [
+    "Professional trading dashboard",
+    "Market intelligence with FII/DII data",
+    "Sector analysis and rotation matrix",
+    "Real-time chat system",
+    "Advanced screener tools",
+    "Premium indicators",
+    "Trading desk with live charts",
+    "User authentication and management",
+    "Admin dashboard",
+    "Supabase integration"
+  ],
+  "files": [
+    "src",
+    "public",
+    "index.html",
+    "package.json",
+    "package-lock.json",
+    "vite.config.ts",
+    "tsconfig.json",
+    "tsconfig.app.json",
+    "tsconfig.node.json",
+    "tailwind.config.js",
+    "postcss.config.js",
+    "eslint.config.js",
+    "supabase"
+  ]
+}

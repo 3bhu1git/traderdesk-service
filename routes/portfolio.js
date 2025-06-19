@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const portfolioController = require('../controllers/portfolioController');
-const { skipApiKeyValidation } = require('../middleware/portfolioMiddleware');
+const { validateApiKey } = require('../middleware/portfolioMiddleware');
 
-// Apply skip validation middleware to all portfolio routes
-router.use(skipApiKeyValidation);
+// Apply validation middleware to all portfolio routes
+router.use(validateApiKey);
 
 router.get('/holdings', (req, res) => portfolioController.getHoldings(req, res));
 router.get('/positions', (req, res) => portfolioController.getPositions(req, res));

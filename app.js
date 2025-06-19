@@ -12,9 +12,11 @@ const connectDB = require('./config/database');
 const apiRoutes = require('./routes/api');
 const portfolioRoutes = require('./routes/portfolio');
 const marketDataRoutes = require('./routes/marketData');
+const brokerRoutes = require('./routes/broker');
 const WebSocketService = require('./services/websocket');
 const CronService = require('./services/cron');
 const { fetchHistoricalData } = require('./scripts/fetchHistoricalData');
+const instrumentService = require('./services/instrumentService');
 
 // Fallback logger if logger is undefined
 if (!logger.requestLogger) {
@@ -75,6 +77,7 @@ console.log('apiRoutes:', apiRoutes, 'Type:', typeof apiRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/market', marketDataRoutes);
+app.use('/api/broker', brokerRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
@@ -94,6 +97,10 @@ const startServer = async () => {
         try {
             await fetchHistoricalData();
             logger.info('Initial historical data fetch completed');
+            
+            // Load instrument data
+            await instrumentService.loadInstruments();
+            logger.info('Instrument data loaded successfully');
         } catch (error) {
             logger.error('Failed to fetch initial historical data:', error);
         }

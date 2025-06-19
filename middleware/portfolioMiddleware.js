@@ -1,8 +1,5 @@
-const skipApiKeyValidation = (req, res, next) => {
-    // Skip API key validation for all portfolio routes
-    next();
-};
+const { validateApiKey } = require('./security');
 
 module.exports = {
-    skipApiKeyValidation
+    validateApiKey
 };

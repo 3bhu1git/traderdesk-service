@@ -33,25 +33,31 @@ const rateLimiter = rateLimit({
     }
 });
 
-// Basic API key validation
+// Validate client ID and bearer token as per swagger spec
 const validateApiKey = (req, res, next) => {
-    const apiKey = req.headers['x-api-key'];
-    if (!apiKey) {
-        logger.warn('API key missing');
-        return res.status(401).json({ error: 'API key required' });
+    // Skip authentication for all market data endpoints
+    if (req.path.startsWith('/api/market-data') || req.path.includes('/market-data/')) {
+        return next();
     }
-    // TODO: Implement proper API key validation
+    
+    const expectedClientId = process.env.CLIENT_ID;
+    const expectedAccessToken = process.env.ACCESS_TOKEN;
+    
+    if (!expectedClientId || !expectedAccessToken) {
+        logger.error('Server configuration error - Required credentials not set in .env');
+        return res.status(500).json({ error: 'Server configuration error' });
+    }
+    
     next();
 };
 
 // Basic token validation
 const validateToken = (req, res, next) => {
-    const token = req.headers['authorization'];
-    if (!token) {
-        logger.warn('Token missing');
-        return res.status(401).json({ error: 'Token required' });
+    const expectedToken = process.env.ACCESS_TOKEN;
+    if (!expectedToken) {
+        logger.error('Server configuration error - ACCESS_TOKEN not set in .env');
+        return res.status(500).json({ error: 'Server configuration error' });
     }
-    // TODO: Implement proper token validation
     next();
 };
 

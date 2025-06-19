@@ -12,7 +12,7 @@ class MarketDataService {
             baseURL: this.baseUrl,
             timeout: 10000,
             headers: {
-                'access-token': process.env.ACCESS_TOKEN,
+                'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
                 'client-id': process.env.CLIENT_ID,
                 'Content-Type': 'application/json'
             }
@@ -89,6 +89,12 @@ class MarketDataService {
 
     async getLivePrice(symbol) {
         try {
+            // First check if market is open
+            const isMarketOpen = await this.checkMarketOpen();
+            if (!isMarketOpen) {
+                throw new Error('Market is currently closed');
+            }
+
             // Subscribe to WebSocket feed
             wsService.subscribe(symbol);
 
@@ -102,6 +108,36 @@ class MarketDataService {
         } catch (error) {
             logger.error('Error fetching live price', {
                 symbol,
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
+    async checkMarketOpen() {
+        try {
+            // Get current time in IST (Indian Standard Time)
+            const now = new Date();
+            const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+            const istTime = new Date(now.getTime() + istOffset);
+            
+            // Get day of week (0 = Sunday, 6 = Saturday)
+            const day = istTime.getUTCDay();
+            
+            // Get hours and minutes in IST
+            const hours = istTime.getUTCHours();
+            const minutes = istTime.getUTCMinutes();
+            
+            // Market hours: 9:15 AM to 3:30 PM IST, Monday to Friday
+            const isWeekday = day >= 1 && day <= 5;
+            const isMarketHours = 
+                (hours > 9 || (hours === 9 && minutes >= 15)) && 
+                (hours < 15 || (hours === 15 && minutes <= 30));
+            
+            return isWeekday && isMarketHours;
+            
+        } catch (error) {
+            logger.error('Error checking market status', {
                 error: error.message
             });
             throw error;
@@ -151,6 +187,48 @@ class MarketDataService {
             return response.data;
         } catch (error) {
             logger.error('Error fetching supported symbols', {
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
+    // Method to fetch intraday historical data
+    async fetchIntradayData(symbol, interval, session) {
+        try {
+            const response = await this.client.get('/historical/intraday', {
+                params: {
+                    symbol,
+                    interval,
+                    session
+                }
+            });
+
+            if (!response.data || !Array.isArray(response.data)) {
+                throw new Error('Invalid response format from Dhan API');
+            }
+
+            // Transform data
+            const intradayData = response.data.map(tick => ({
+                symbol,
+                exchange: 'NSE',
+                timestamp: new Date(tick.timestamp),
+                price: tick.price,
+                volume: tick.volume
+            }));
+
+            logger.info('Intraday data fetched', {
+                symbol,
+                interval,
+                count: intradayData.length
+            });
+
+            return intradayData;
+
+        } catch (error) {
+            logger.error('Error fetching intraday data', {
+                symbol,
+                interval,
                 error: error.message
             });
             throw error;

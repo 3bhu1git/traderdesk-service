@@ -8,6 +8,7 @@ class DhanApiService {
             baseURL: config.dhan.baseUrl,
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAccessToken()}`,
                 'access-token': getAccessToken(),
                 'client-id': getClientId()
             }
