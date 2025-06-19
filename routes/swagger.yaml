@@ -11,8 +11,10 @@ info:
     These will be stored in your browser's localStorage and used for all API requests.
 
 servers:
-  - url: http://localhost:3001
-    description: Development server
+  - url: https://automatic-telegram-6r7ww5gw574h456r-3000.app.github.dev
+    description: GitHub Codespace public server (default)
+  - url: http://localhost:3000
+    description: Local development server
 
 components:
   securitySchemes:
@@ -353,8 +355,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BrokerConnection'
-
-  /api/brokers:
     get:
       summary: List all broker accounts for the authenticated user
       responses:
