@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import { LocalStorageService } from '../lib/localStorage';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 const Broker: React.FC = () => {
   const { user } = useAuth();
   const [isDhanConnected, setIsDhanConnected] = useState(false);
@@ -13,6 +15,7 @@ const Broker: React.FC = () => {
   const [showDhanForm, setShowDhanForm] = useState(false);
   const [showZerodhaForm, setShowZerodhaForm] = useState(false);
   const [dhanCredentials, setDhanCredentials] = useState({
+    customer: '',
     clientId: '',
     clientSecret: ''
   });
@@ -37,6 +40,7 @@ const Broker: React.FC = () => {
           try {
             const credentials: DhanCredentials = JSON.parse(storedCredentials);
             setDhanCredentials({
+              customer: credentials.customer || '',
               clientId: credentials.clientId,
               clientSecret: '********'
             });
@@ -129,8 +133,8 @@ const Broker: React.FC = () => {
   };
 
   const handleDhanConnect = async () => {
-    if (!dhanCredentials.clientId || !dhanCredentials.clientSecret) {
-      setError('Please enter both Client ID and Client Secret');
+    if (!dhanCredentials.customer || !dhanCredentials.clientId || !dhanCredentials.clientSecret) {
+      setError('Please enter Customer Name, Client ID and Access Token');
       return;
     }
 
@@ -138,38 +142,32 @@ const Broker: React.FC = () => {
     setError('');
 
     try {
-      // Initialize Dhan API service with credentials
-      const credentials: DhanCredentials = {
-        clientId: dhanCredentials.clientId,
-        clientSecret: dhanCredentials.clientSecret
-      };
-      
-      DhanApiService.initialize(credentials);
-      
-      // Attempt to authenticate
-      const success = await DhanApiService.authenticate();
-      
-      if (success) {
-        // Store credentials in localStorage (encrypt in production)
-        localStorage.setItem('dhanCredentials', JSON.stringify(credentials));
-        
-        // Update state
+      // Call backend API to connect Dhan broker
+      const response = await fetch(`${API_BASE_URL}/api/brokers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          broker: 'dhan',
+          customer: dhanCredentials.customer,
+          credentials: {
+            clientId: dhanCredentials.clientId,
+            accessToken: dhanCredentials.clientSecret
+          }
+        })
+      });
+      if (response.ok) {
         setIsDhanConnected(true);
         setShowDhanForm(false);
-        
-        // Log connection
-        logConnection('dhan', credentials.clientId, 'connected');
-        
-        // Fetch account info
         fetchAccountInfo();
+        // Optionally log connection
+        logConnection('dhan', dhanCredentials.clientId, 'connected');
       } else {
-        setError('Authentication failed. Please check your credentials.');
-        logConnection('dhan', credentials.clientId, 'failed');
+        const data = await response.json();
+        setError(data.error || 'Authentication failed. Please check your credentials.');
+        logConnection('dhan', dhanCredentials.clientId, 'failed');
       }
     } catch (error) {
-      console.error('Error connecting to Dhan:', error);
       setError('Failed to connect to Dhan. Please try again.');
-      
       if (dhanCredentials.clientId) {
         logConnection('dhan', dhanCredentials.clientId, 'error');
       }
@@ -216,6 +214,7 @@ const Broker: React.FC = () => {
     localStorage.removeItem('dhanCredentials');
     setIsDhanConnected(false);
     setDhanCredentials({
+      customer: '',
       clientId: '',
       clientSecret: ''
     });
@@ -532,8 +531,19 @@ const Broker: React.FC = () => {
                 ✕
               </button>
             </div>
-
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Customer Name</label>
+                <input
+                  type="text"
+                  value={dhanCredentials.customer}
+                  onChange={(e) => setDhanCredentials({...dhanCredentials, customer: e.target.value})}
+                  placeholder="Enter a unique name for this account"
+                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 placeholder-slate-500"
+                />
+                <p className="mt-1 text-xs text-slate-500">Example: My Dhan, Wife Dhan</p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Client ID</label>
                 <input

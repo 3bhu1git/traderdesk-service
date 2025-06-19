@@ -30,19 +30,43 @@ if (!logger.requestLogger) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS configuration
+// Global logger to debug all incoming requests
+app.use((req, res, next) => {
+  console.log(`[GLOBAL LOGGER] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// CORS middleware must be first
+const allowedOrigins = require('./config/corsOrigins');
 const corsOptions = {
-    origin: ['http://localhost:3000', 'http://localhost:5173', 'https://api.dhan.co'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Dhan-Client-Id', 'x-client-id'],
     credentials: true
 };
+app.use(cors(corsOptions));
 
 // Middleware
-app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(logger.requestLogger);
+
+// Log all incoming requests for debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// Request and response logger middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  console.log(`[LOG] Request: ${req.method} ${req.originalUrl}`);
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[LOG] Response: ${req.method} ${req.originalUrl} - Status: ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -77,7 +101,20 @@ console.log('apiRoutes:', apiRoutes, 'Type:', typeof apiRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/market', marketDataRoutes);
-app.use('/api/broker', brokerRoutes);
+app.use('/api', brokerRoutes); // Mount broker routes at /api
+
+// Catch-all route for SPA (React/Vite): serve index.html for unknown routes (except API/static)
+app.get('*', (req, res, next) => {
+    if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/public') ||
+        req.path.startsWith('/api-docs') ||
+        req.path.startsWith('/js')
+    ) {
+        return next();
+    }
+    res.sendFile(path.join(__dirname, 'ui', 'dist', 'index.html'));
+});
 
 // Global error handler
 app.use((err, req, res, next) => {

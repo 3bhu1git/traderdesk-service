@@ -59,4 +59,42 @@ router.get('/list', async (req, res) => {
   }
 });
 
+// Debug: Log every /brokers POST request
+router.post('/brokers', async (req, res) => {
+  console.log('POST /api/brokers called. Body:', req.body);
+  try {
+    // Accepts: { broker, customer, credentials }
+    const { broker, customer, credentials } = req.body;
+    if (!broker || !customer || !credentials) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    // For demo, use a dummy userId (replace with real auth in production)
+    const userId = req.user ? req.user.id : 'dummy-user-id';
+    if (broker === 'dhan') {
+      const brokerPanel = new BrokerPanel(userId);
+      // Save Dhan connection (apiKey is optional for now)
+      const result = await brokerPanel.addDhanConnection({
+        clientId: credentials.clientId,
+        apiKey: credentials.apiKey || '',
+        accessToken: credentials.accessToken
+      });
+      return res.status(201).json({ success: true, account: result });
+    }
+    // Add more brokers as needed
+    return res.status(400).json({ error: 'Unsupported broker' });
+  } catch (error) {
+    console.error('Error in /api/brokers:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Explicitly handle OPTIONS for CORS preflight on /brokers
+router.options('/brokers', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Dhan-Client-Id, x-client-id');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(204);
+});
+
 module.exports = router;
