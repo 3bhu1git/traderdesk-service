@@ -357,6 +357,13 @@ paths:
                 $ref: '#/components/schemas/BrokerConnection'
     get:
       summary: List all broker accounts for the authenticated user
+      parameters:
+        - in: query
+          name: userId
+          schema:
+            type: string
+          required: true
+          description: User ID
       responses:
         '200':
           description: List of broker accounts
@@ -366,6 +373,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/BrokerConnection'
+        '400':
+          description: Invalid input
 
   /api/brokers/{brokerAccountId}:
     patch:

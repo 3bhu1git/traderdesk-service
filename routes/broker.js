@@ -59,6 +59,18 @@ router.get('/list', async (req, res) => {
   }
 });
 
+// GET /brokers - List all broker accounts (proxy to /broker/list)
+router.get('/brokers', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const brokerPanel = new BrokerPanel(userId);
+    const result = await brokerPanel.render();
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Debug: Log every /brokers POST request
 router.post('/brokers', async (req, res) => {
   console.log('POST /api/brokers called. Body:', req.body);
