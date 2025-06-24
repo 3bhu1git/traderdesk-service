@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, TrendingUp, BarChart3, Clock, Loader } from 'lucide-react';
-import { NSEDataService, NSEStockData } from '../../services/nseDataService';
-import { ScripMasterService } from '../../services/scripMasterService';
 
 interface IntelligentSearchProps {
   onSymbolSelect: (symbol: string) => void;
@@ -10,35 +8,17 @@ interface IntelligentSearchProps {
 
 const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onSymbolSelect, selectedSymbol }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<NSEStockData[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [popularSymbols, setPopularSymbols] = useState<string[]>([
+  const [popularSymbols] = useState<string[]>([
     'NIFTY', 'BANKNIFTY', 'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 
     'ADANIPORTS', 'JSWSTEEL', 'TATAMOTORS', 'ICICIBANK', 'SBIN', 'AXISBANK'
   ]);
-  const [isScripMasterLoading, setIsScripMasterLoading] = useState(false);
   
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  
-  // Load scrip master on component mount
-  useEffect(() => {
-    const loadScripMaster = async () => {
-      setIsScripMasterLoading(true);
-      try {
-        const scripMasterService = ScripMasterService.getInstance();
-        await scripMasterService.loadScripMaster();
-      } catch (error) {
-        console.error('Error loading scrip master:', error);
-      } finally {
-        setIsScripMasterLoading(false);
-      }
-    };
-    
-    loadScripMaster();
-  }, []);
   
   // Load recent searches from localStorage
   useEffect(() => {
@@ -68,40 +48,12 @@ const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onSymbolSelect, s
     const delayDebounceFn = setTimeout(async () => {
       setIsLoading(true);
       try {
-        // First try to search in scrip master
-        const scripMasterService = ScripMasterService.getInstance();
-        const scripResults = scripMasterService.searchScrips(searchTerm, 10);
-        
-        if (scripResults.length > 0) {
-          // Convert scrip results to NSEStockData format
-          const formattedResults: NSEStockData[] = scripResults.map(scrip => ({
-            symbol: scrip.symbol,
-            name: scrip.name || scrip.symbol,
-            price: 0,
-            change: 0,
-            changePercent: 0,
-            volume: 0,
-            exchange: scrip.exchange
-          }));
-          
-          setSearchResults(formattedResults);
-        } else {
-          // Fallback to NSE API search
-          const results = await NSEDataService.searchStocks(searchTerm);
-          setSearchResults(results);
-        }
-        
+        // No scrip master, just return empty or static results
+        setSearchResults([]);
         setShowResults(true);
       } catch (error) {
-        console.error('Error searching stocks:', error);
-        // Try NSE API as fallback if scrip master search fails
-        try {
-          const results = await NSEDataService.searchStocks(searchTerm);
-          setSearchResults(results);
-          setShowResults(true);
-        } catch (fallbackError) {
-          console.error('Fallback search also failed:', fallbackError);
-        }
+        setSearchResults([]);
+        setShowResults(true);
       } finally {
         setIsLoading(false);
       }
@@ -164,11 +116,11 @@ const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onSymbolSelect, s
         {/* Search Results Dropdown */}
         {showResults && (
           <div className="absolute left-0 right-0 top-full mt-1 bg-slate-900/95 backdrop-blur-xl rounded-sm shadow-xl border border-slate-700/50 z-20">
-            {isLoading || isScripMasterLoading ? (
+            {isLoading ? (
               <div className="p-4 text-center">
                 <div className="flex items-center justify-center space-x-2">
                   <Loader className="w-5 h-5 text-green-400 animate-spin" />
-                  <p className="text-slate-400 font-mono">{isScripMasterLoading ? 'Loading scrip master...' : 'Searching...'}</p>
+                  <p className="text-slate-400 font-mono">Searching...</p>
                 </div>
               </div>
             ) : (

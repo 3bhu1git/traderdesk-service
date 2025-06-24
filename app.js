@@ -97,7 +97,7 @@ const swaggerUiOptions = {
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUiOptions));
 
 // API routes
-console.log('apiRoutes:', apiRoutes, 'Type:', typeof apiRoutes);
+// console.log('apiRoutes:', apiRoutes, 'Type:', typeof apiRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/market', marketDataRoutes);

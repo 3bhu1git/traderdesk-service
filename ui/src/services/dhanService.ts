@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { getApiBaseUrl } from '../lib/getApiBaseUrl';
 
-const DHAN_BASE_URL = 'https://api.dhan.co';
 const DHAN_API_KEY = process.env.DHAN_API_KEY;
+const DHAN_BASE_URL = getApiBaseUrl();
 
 interface MarketData {
   nifty: { value: number; change: number; changePercent: number };

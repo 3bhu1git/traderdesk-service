@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { LocalStorageService } from '../lib/localStorage';
 import { ScripMasterService } from '../services/scripMasterService';
+import { getApiBaseUrl } from '../lib/getApiBaseUrl';
 
 // Types for Dhan API
 export interface DhanCredentials {
@@ -730,11 +731,7 @@ export class DhanApiService {
     if (this.requestQueue.length > 0 && this.requestsInProgress < this.maxConcurrentRequests) {
       const nextRequest = this.requestQueue.shift();
       if (nextRequest) {
-        try {
-          await nextRequest;
-        } catch (error) {
-          console.error('Error processing queued request:', error);
-        }
+        await nextRequest;
       }
     }
   }

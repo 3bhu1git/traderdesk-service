@@ -1,5 +1,6 @@
 import * as Realm from 'realm-web';
 import { DhanApiService } from './dhanApiService';
+import { getApiBaseUrl } from '../lib/getApiBaseUrl';
 
 interface CandleData {
   symbol: string;
@@ -25,7 +26,7 @@ export class MarketDataService {
   private baseUrl: string;
 
   private constructor() {
-    this.baseUrl = '/api/market';
+    this.baseUrl = getApiBaseUrl() + '/api/market';
   }
 
   public static getInstance(): MarketDataService {
@@ -120,4 +121,4 @@ export class MarketDataService {
       throw error;
     }
   }
-} 
+}
