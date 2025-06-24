@@ -109,4 +109,13 @@ router.options('/brokers', (req, res) => {
   res.sendStatus(204);
 });
 
+// Explicitly handle OPTIONS for CORS preflight on /api/brokers
+router.options('/api/brokers', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Dhan-Client-Id, x-client-id');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(204);
+});
+
 module.exports = router;

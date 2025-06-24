@@ -74,7 +74,7 @@ export interface LocalStorageOrderLog {
 }
 
 export interface LocalStorageBrokerConnection {
-  id?: string;
+  id: string;
   user_id: string;
   broker: string;
   client_id: string;

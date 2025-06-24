@@ -1,7 +1,5 @@
-import { NSEDataService } from './nseDataService';
 import { DhanApiService } from './dhanApiService';
-import { ScripMasterService } from './scripMasterService';
-import { LocalStorageService, StockData, OptionChainData, FiiDiiData, SectorData } from '../lib/localStorage';
+import { LocalStorageService, StockData, OptionChainData, FiiDiiData, SectorData, LocalStorageBrokerConnection } from '../lib/localStorage';
 import { MarketDataService } from './marketDataService';
 
 // Centralized data service to handle all data fetching operations
@@ -92,7 +90,7 @@ export class DataService {
       
       if (existingStocks.length > 0) {
         // Update existing stock
-        LocalStorageService.update('stock_data', existingStocks[0].id, stockData);
+        LocalStorageService.update<StockData>('stock_data', existingStocks[0].id, stockData as Partial<StockData>);
       } else {
         // Create new stock
         LocalStorageService.create<StockData>('stock_data', stockData);
@@ -276,14 +274,8 @@ export class DataService {
             try {
               const marketStatus = await DhanApiService.getMarketStatus();
               if (marketStatus) {
-                // Combine with NSE data for a complete picture
-                const nseData = await NSEDataService.getMarketData();
-                const combinedData = {
-                  ...nseData,
-                  marketStatus
-                };
-                
-                // Cache but don't persist market summary data
+                // Only return marketStatus if available
+                const combinedData = { marketStatus };
                 this.setCachedData(cacheKey, combinedData);
                 return combinedData;
               }
@@ -291,14 +283,11 @@ export class DataService {
               console.error('Error fetching market data from Dhan:', error);
             }
           }
-          
-          // Fallback to NSE data
-          const nseData = await NSEDataService.getMarketData();
-          // Cache but don't persist market summary data
-          this.setCachedData(cacheKey, nseData);
-          return nseData;
+          // No fallback, return empty object
+          const emptyData = {};
+          this.setCachedData(cacheKey, emptyData);
+          return emptyData;
         } finally {
-          // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
         }
       })();
@@ -337,11 +326,8 @@ export class DataService {
             return localData;
           }
           
-          // Fallback to NSE data
-          const data = await NSEDataService.getSectorData();
-          // Cache and persist sector data
-          this.setCachedData(cacheKey, data);
-          return data;
+          // No data found, return empty array
+          return [];
         } finally {
           // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
@@ -385,11 +371,8 @@ export class DataService {
             return localData;
           }
           
-          // Fallback to NSE data
-          const data = await NSEDataService.getFIIDIIData(days);
-          // Cache and persist FII/DII data
-          this.setCachedData(cacheKey, data);
-          return data;
+          // No data found, return empty array
+          return [];
         } finally {
           // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
@@ -432,28 +415,8 @@ export class DataService {
             return localData;
           }
           
-          // If Dhan is connected, try to get real-time data
-          if (this.isDhanConnected) {
-            try {
-              // Get scrip details from scrip master
-              const scripMasterService = ScripMasterService.getInstance();
-              const scripDetails = scripMasterService.getScripDetails(symbol);
-              
-              if (scripDetails) {
-                // In a real implementation, we would use the token to get real-time data
-                // For now, we'll fall back to NSE data
-              }
-            } catch (error) {
-              console.error('Error fetching stock data from Dhan:', error);
-            }
-          }
-          
-          // Fallback to NSE data
-          const data = await NSEDataService.getStockData(symbol);
-          if (data) {
-            this.setCachedData(cacheKey, data);
-          }
-          return data;
+          // No data found, return null
+          return null;
         } finally {
           // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
@@ -498,10 +461,8 @@ export class DataService {
             return localData;
           }
           
-          // Fallback to NSE data
-          const data = await NSEDataService.getTopGainers(limit);
-          this.setCachedData(cacheKey, data);
-          return data;
+          // No data found, return empty array
+          return [];
         } finally {
           // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
@@ -546,10 +507,8 @@ export class DataService {
             return localData;
           }
           
-          // Fallback to NSE data
-          const data = await NSEDataService.getTopLosers(limit);
-          this.setCachedData(cacheKey, data);
-          return data;
+          // No data found, return empty array
+          return [];
         } finally {
           // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
@@ -603,33 +562,8 @@ export class DataService {
             return formattedData;
           }
           
-          // If Dhan is connected, try to get data from there first
-          if (this.isDhanConnected) {
-            try {
-              const optionChain = await DhanApiService.getOptionChain(symbol, expiryDate || '');
-              if (optionChain && optionChain.strikes) {
-                const formattedData = optionChain.strikes.map((item: any) => ({
-                  strike: item.strike,
-                  ce_oi: item.callOption.oi,
-                  pe_oi: item.putOption.oi,
-                  ce_volume: item.callOption.volume,
-                  pe_volume: item.putOption.volume,
-                  ce_iv: item.callOption.iv,
-                  pe_iv: item.putOption.iv
-                }));
-                
-                this.setCachedData(cacheKey, formattedData);
-                return formattedData;
-              }
-            } catch (error) {
-              console.error('Error fetching option chain from Dhan:', error);
-            }
-          }
-          
-          // Fallback to NSE data
-          const data = await NSEDataService.getOptionChainData(symbol, expiryDate);
-          this.setCachedData(cacheKey, data);
-          return data;
+          // No data found, return empty array
+          return [];
         } finally {
           // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
@@ -674,23 +608,8 @@ export class DataService {
             }
           }
           
-          // If Dhan is connected, try to get data from there first
-          if (this.isDhanConnected) {
-            try {
-              const dates = await DhanApiService.getExpiryDates(symbol);
-              if (dates && dates.length > 0) {
-                this.setCachedData(cacheKey, dates);
-                return dates;
-              }
-            } catch (error) {
-              console.error('Error fetching expiry dates from Dhan:', error);
-            }
-          }
-          
-          // Fallback to NSE data
-          const dates = await NSEDataService.getExpiryDates(symbol);
-          this.setCachedData(cacheKey, dates);
-          return dates;
+          // No data found, return empty array
+          return [];
         } finally {
           // Remove from pending requests when done
           this.pendingRequests.delete(cacheKey);
@@ -713,23 +632,6 @@ export class DataService {
     try {
       // Don't cache search results
       
-      // First try to search in scrip master
-      const scripMasterService = ScripMasterService.getInstance();
-      const scripResults = scripMasterService.searchScrips(query, 10);
-      
-      if (scripResults.length > 0) {
-        // Convert scrip results to stock data format
-        return scripResults.map(scrip => ({
-          symbol: scrip.symbol,
-          name: scrip.name || scrip.symbol,
-          price: 0,
-          change: 0,
-          changePercent: 0,
-          volume: 0,
-          exchange: scrip.exchange
-        }));
-      }
-      
       // Try to search in localStorage
       const allStocks = LocalStorageService.getAll<StockData>('stock_data');
       const matchingStocks = allStocks.filter(stock => 
@@ -749,8 +651,8 @@ export class DataService {
         }));
       }
       
-      // Fallback to NSE search
-      return await NSEDataService.searchStocks(query);
+      // No match found
+      return [];
     } catch (error) {
       console.error(`Error searching stocks for "${query}":`, error);
       throw error;
@@ -852,13 +754,15 @@ export class DataService {
   // Log order to localStorage
   public logOrder(userId: string, orderType: string, params: any, response?: any, error?: string, status: 'attempted' | 'completed' | 'failed' = 'completed'): void {
     try {
+      // Fix: logOrder to use correct property names for LocalStorageOrderLog
       LocalStorageService.create('order_logs', {
-        userId,
-        orderType,
+        user_id: userId,
+        order_type: orderType,
         params,
         response,
         error,
-        status
+        status,
+        created_at: new Date().toISOString()
       });
     } catch (error) {
       console.error('Error logging order to localStorage:', error);
@@ -869,23 +773,30 @@ export class DataService {
   public logBrokerConnection(userId: string, broker: string, clientId: string, status: 'connected' | 'disconnected' | 'failed' | 'error'): void {
     try {
       // Check if connection already exists
-      const connections = LocalStorageService.getByField<any>('broker_connections', 'clientId', clientId)
-        .filter(conn => conn.broker === broker && conn.userId === userId);
+      const connections = LocalStorageService.getByField<any>('broker_connections', 'client_id', clientId)
+        .filter(conn => conn.broker === broker && conn.user_id === userId);
       
       if (connections.length > 0) {
         // Update existing connection
-        LocalStorageService.update('broker_connections', connections[0].id, {
-          status,
-          lastConnectedAt: new Date().toISOString()
-        });
+        LocalStorageService.update<LocalStorageBrokerConnection>(
+          'broker_connections',
+          connections[0].id as string,
+          {
+            status,
+            last_connected_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        );
       } else {
         // Create new connection
         LocalStorageService.create('broker_connections', {
-          userId,
+          user_id: userId,
           broker,
-          clientId,
+          client_id: clientId,
           status,
-          lastConnectedAt: new Date().toISOString()
+          last_connected_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
       }
     } catch (error) {
@@ -956,7 +867,7 @@ export class DataService {
           // Save to MongoDB
           await this.marketDataService.saveHistoricalData(symbol, data);
           
-          return data.map(candle => ({
+          return data.map((candle: any) => ({
             time: candle.timestamp,
             open: candle.open,
             high: candle.high,

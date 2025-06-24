@@ -1,10 +1,9 @@
 import axios from 'axios';
 import { LocalStorageService } from '../lib/localStorage';
-import { ScripMasterService } from '../services/scripMasterService';
-import { getApiBaseUrl } from '../lib/getApiBaseUrl';
 
 // Types for Dhan API
 export interface DhanCredentials {
+  customer: string;
   clientId: string;
   clientSecret: string;
 }
@@ -430,15 +429,8 @@ export class DhanApiService {
       // Convert exchange to Dhan's exchange segment format
       const exchangeSegment = exchange === 'NSE' ? 'NSE_EQ' : 'BSE_EQ';
       
-      // Get security ID from scrip master
-      const scripMasterService = ScripMasterService.getInstance();
-      const scripDetails = scripMasterService.getScripDetails(symbol);
-      if (!scripDetails) {
-        throw new Error(`Security ID not found for symbol: ${symbol}`);
-      }
-
       const requestBody = {
-        securityId: scripDetails.securityId,
+        securityId: symbol, // Use symbol directly, securityId is not available
         exchangeSegment: exchangeSegment,
         instrument: "EQUITY",
         expiryCode: 0,

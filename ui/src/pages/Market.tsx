@@ -161,10 +161,10 @@ const Market: React.FC = () => {
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
               </div>
               <div className="text-xl font-bold text-slate-200 font-mono mb-1">
-                {marketData?.nifty.value.toLocaleString() || '19,745.30'}
+                {marketData?.nifty && marketData.nifty.value !== undefined ? marketData.nifty.value.toLocaleString() : '19,745.30'}
               </div>
-              <div className={`text-sm font-mono ${(marketData?.nifty.change || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(marketData?.nifty.change || 0) >= 0 ? '+' : ''}{marketData?.nifty.change || '165.85'} ({(marketData?.nifty.changePercent || 0) >= 0 ? '+' : ''}{marketData?.nifty.changePercent || '0.86'}%)
+              <div className={`text-sm font-mono ${(marketData?.nifty && marketData.nifty.change || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {(marketData?.nifty && marketData.nifty.change || 0) >= 0 ? '+' : ''}{marketData?.nifty && marketData.nifty.change || '165.85'} ({(marketData?.nifty && marketData.nifty.changePercent || 0) >= 0 ? '+' : ''}{marketData?.nifty && marketData.nifty.changePercent || '0.86'}%)
               </div>
             </div>
 
@@ -177,10 +177,10 @@ const Market: React.FC = () => {
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
               </div>
               <div className="text-xl font-bold text-slate-200 font-mono mb-1">
-                {marketData?.sensex.value.toLocaleString() || '65,721.25'}
+                {marketData?.sensex && marketData.sensex.value !== undefined ? marketData.sensex.value.toLocaleString() : '65,721.25'}
               </div>
-              <div className={`text-sm font-mono ${(marketData?.sensex.change || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(marketData?.sensex.change || 0) >= 0 ? '+' : ''}{marketData?.sensex.change || '425.60'} ({(marketData?.sensex.changePercent || 0) >= 0 ? '+' : ''}{marketData?.sensex.changePercent || '0.65'}%)
+              <div className={`text-sm font-mono ${(marketData?.sensex && marketData.sensex.change || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {(marketData?.sensex && marketData.sensex.change || 0) >= 0 ? '+' : ''}{marketData?.sensex && marketData.sensex.change || '425.60'} ({(marketData?.sensex && marketData.sensex.changePercent || 0) >= 0 ? '+' : ''}{marketData?.sensex && marketData.sensex.changePercent || '0.65'}%)
               </div>
             </div>
 
@@ -193,10 +193,10 @@ const Market: React.FC = () => {
                 <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
               </div>
               <div className="text-xl font-bold text-slate-200 font-mono mb-1">
-                {marketData?.vix.value || '11.25'}
+                {marketData?.vix && marketData.vix.value !== undefined ? marketData.vix.value : '11.25'}
               </div>
-              <div className={`text-sm font-mono ${(marketData?.vix.change || 0) >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {(marketData?.vix.change || 0) >= 0 ? '+' : ''}{marketData?.vix.change || '-0.85'} ({(marketData?.vix.changePercent || 0) >= 0 ? '+' : ''}{marketData?.vix.changePercent || '-6.02'}%)
+              <div className={`text-sm font-mono ${(marketData?.vix && marketData.vix.change || 0) >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                {(marketData?.vix && marketData.vix.change || 0) >= 0 ? '+' : ''}{marketData?.vix && marketData.vix.change || '-0.85'} ({(marketData?.vix && marketData.vix.changePercent || 0) >= 0 ? '+' : ''}{marketData?.vix && marketData.vix.changePercent || '-6.02'}%)
               </div>
             </div>
 
@@ -211,11 +211,11 @@ const Market: React.FC = () => {
               <div className="text-sm font-mono text-slate-200 space-y-1">
                 <div className="flex justify-between">
                   <span className="text-green-400">Advances:</span>
-                  <span>{marketData?.advanceDecline.advances || '1847'}</span>
+                  <span>{marketData?.advanceDecline && marketData.advanceDecline.advances !== undefined ? marketData.advanceDecline.advances : '1847'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-red-400">Declines:</span>
-                  <span>{marketData?.advanceDecline.declines || '1203'}</span>
+                  <span>{marketData?.advanceDecline && marketData.advanceDecline.declines !== undefined ? marketData.advanceDecline.declines : '1203'}</span>
                 </div>
               </div>
             </div>
@@ -236,15 +236,15 @@ const Market: React.FC = () => {
                   <div 
                     className="absolute left-0 top-0 h-full bg-gradient-to-r from-green-500 to-green-400"
                     style={{ 
-                      width: marketData ? 
-                        `${(marketData.advanceDecline.advances / (marketData.advanceDecline.advances + marketData.advanceDecline.declines)) * 100}%` : 
-                        '60%' 
+                      width: marketData && marketData.advanceDecline && typeof marketData.advanceDecline.advances === 'number' && typeof marketData.advanceDecline.declines === 'number' && (marketData.advanceDecline.advances + marketData.advanceDecline.declines) > 0
+                        ? `${(marketData.advanceDecline.advances / (marketData.advanceDecline.advances + marketData.advanceDecline.declines)) * 100}%`
+                        : '60%' 
                     }}
                   ></div>
                 </div>
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-green-400">{marketData?.advanceDecline.advances || '1847'} Advances</span>
-                  <span className="text-red-400">{marketData?.advanceDecline.declines || '1203'} Declines</span>
+                  <span className="text-green-400">{marketData?.advanceDecline && marketData.advanceDecline.advances !== undefined ? marketData.advanceDecline.advances : '1847'} Advances</span>
+                  <span className="text-red-400">{marketData?.advanceDecline && marketData.advanceDecline.declines !== undefined ? marketData.advanceDecline.declines : '1203'} Declines</span>
                 </div>
               </div>
 
@@ -478,7 +478,7 @@ const Market: React.FC = () => {
                     'bg-red-600/80 text-white'
                   }`}
                 >
-                  <div className="text-xs font-mono font-semibold mb-1">{sector.name.split(' ')[0].slice(0, 6).toUpperCase()}</div>
+                  <div className="text-xs font-mono font-semibold mb-1">{sector.name.split(' ')[0].slice(0, 6).toUpperCASE()}</div>
                   <div className="text-sm font-mono font-bold">{sector.changePercent >= 0 ? '+' : ''}{sector.changePercent}%</div>
                   <div className="text-xs font-mono opacity-80">₹{Math.abs(sector.change).toFixed(0)}</div>
                 </div>

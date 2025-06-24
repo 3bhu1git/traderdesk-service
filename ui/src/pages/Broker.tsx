@@ -4,8 +4,9 @@ import { DhanApiService, DhanCredentials } from '../services/dhanApiService';
 import { useAuth } from '../context/AuthContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import { LocalStorageService } from '../lib/localStorage';
+import { getApiBaseUrl } from '../lib/getApiBaseUrl';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = getApiBaseUrl();
 
 const Broker: React.FC = () => {
   const { user } = useAuth();
