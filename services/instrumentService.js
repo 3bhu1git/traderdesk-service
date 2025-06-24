@@ -1,58 +1,28 @@
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const logger = require('../utils/logger');
 
 class InstrumentService {
     constructor() {
         this.instruments = [];
         this.cachePath = path.join(__dirname, '../data/instruments.json');
-        this.csvUrl = 'https://example.com/instruments/master.csv';
     }
 
     async loadInstruments() {
         try {
-            // Try to load from cache first
+            // Only load from cache, do not download
             if (fs.existsSync(this.cachePath)) {
                 const cachedData = fs.readFileSync(this.cachePath, 'utf8');
                 this.instruments = JSON.parse(cachedData);
                 logger.info('Loaded instruments from cache');
                 return;
             }
-
-            // Download and parse CSV if no cache exists
-            await this.downloadAndParseCSV();
+            // If no cache, leave instruments empty
+            logger.warn('No instrument cache found, instruments list is empty');
         } catch (error) {
             logger.error('Failed to load instruments:', error);
             throw error;
         }
-    }
-
-    async downloadAndParseCSV() {
-        try {
-            logger.info('Downloading instrument master CSV...');
-            const response = await axios.get(this.csvUrl);
-            
-            // Parse CSV data
-            const csvData = response.data;
-            this.instruments = this.parseCSV(csvData);
-            
-            // Cache parsed data
-            this.cacheInstruments();
-            logger.info('Successfully downloaded and cached instruments');
-        } catch (error) {
-            logger.error('Failed to download instrument CSV:', error);
-            throw error;
-        }
-    }
-
-    parseCSV(csvData) {
-        // Implement CSV parsing logic here
-        // This is a placeholder - actual implementation will depend on CSV structure
-        return csvData.split('\n').slice(1).map(line => {
-            const [symbol, name, exchange] = line.split(',');
-            return { symbol, name, exchange };
-        });
     }
 
     cacheInstruments() {
@@ -62,7 +32,6 @@ class InstrumentService {
             if (!fs.existsSync(dataDir)) {
                 fs.mkdirSync(dataDir, { recursive: true });
             }
-            
             // Write to cache file
             fs.writeFileSync(this.cachePath, JSON.stringify(this.instruments));
         } catch (error) {
@@ -75,7 +44,6 @@ class InstrumentService {
         if (!this.instruments.length) {
             throw new Error('Instruments not loaded');
         }
-        
         // Simple case-insensitive search
         return this.instruments.filter(instrument => {
             return instrument.symbol.toLowerCase().includes(query.toLowerCase()) ||
