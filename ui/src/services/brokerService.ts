@@ -24,6 +24,32 @@ export interface BrokerResponse {
   data?: any;
 }
 
+export interface TradingAccount {
+  id: string;
+  brokerName: string;
+  accountName: string;
+  accountId: string;
+  accountType: 'Trading' | 'Demat' | 'Combined';
+  isActive: boolean;
+  isPrimary: boolean;
+  isLive: boolean;
+  accessToken: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TradingAccountData {
+  brokerName: string;
+  accountName: string;
+  accountId: string;
+  accountType?: 'Trading' | 'Demat' | 'Combined';
+  apiKey?: string;
+  accessToken: string;
+  tags?: string[];
+  isLive?: boolean;
+}
+
 class BrokerService {
   private static getAuthToken(): string | null {
     return localStorage.getItem('traderdesk_auth_token');
@@ -166,6 +192,134 @@ class BrokerService {
       return result;
     } catch (error) {
       console.error('[BrokerService] Set primary broker error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    }
+  }
+
+  /**
+   * Add a new trading account
+   */
+  public static async addTradingAccount(accountData: TradingAccountData): Promise<BrokerResponse> {
+    try {
+      console.log('[BrokerService] Adding trading account:', accountData);
+
+      const response = await fetch(`${API_BASE_URL}/api/brokers/trading-accounts`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(accountData)
+      });
+
+      const result = await response.json();
+      console.log('[BrokerService] Add trading account response:', result);
+
+      return result;
+    } catch (error) {
+      console.error('[BrokerService] Add trading account error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    }
+  }
+
+  /**
+   * Get all trading accounts
+   */
+  public static async getTradingAccounts(): Promise<BrokerResponse> {
+    try {
+      console.log('[BrokerService] Fetching trading accounts');
+
+      const response = await fetch(`${API_BASE_URL}/api/brokers/trading-accounts`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      const result = await response.json();
+      console.log('[BrokerService] Trading accounts response:', result);
+
+      return result;
+    } catch (error) {
+      console.error('[BrokerService] Get trading accounts error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    }
+  }
+
+  /**
+   * Update a trading account
+   */
+  public static async updateTradingAccount(accountId: string, updateData: Partial<TradingAccountData>): Promise<BrokerResponse> {
+    try {
+      console.log('[BrokerService] Updating trading account:', accountId, updateData);
+
+      const response = await fetch(`${API_BASE_URL}/api/brokers/trading-accounts/${accountId}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(updateData)
+      });
+
+      const result = await response.json();
+      console.log('[BrokerService] Update trading account response:', result);
+
+      return result;
+    } catch (error) {
+      console.error('[BrokerService] Update trading account error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    }
+  }
+
+  /**
+   * Delete a trading account
+   */
+  public static async deleteTradingAccount(accountId: string): Promise<BrokerResponse> {
+    try {
+      console.log('[BrokerService] Deleting trading account:', accountId);
+
+      const response = await fetch(`${API_BASE_URL}/api/brokers/trading-accounts/${accountId}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      });
+
+      const result = await response.json();
+      console.log('[BrokerService] Delete trading account response:', result);
+
+      return result;
+    } catch (error) {
+      console.error('[BrokerService] Delete trading account error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    }
+  }
+
+  /**
+   * Set primary trading account
+   */
+  public static async setPrimaryTradingAccount(accountId: string): Promise<BrokerResponse> {
+    try {
+      console.log('[BrokerService] Setting primary trading account:', accountId);
+
+      const response = await fetch(`${API_BASE_URL}/api/brokers/trading-accounts/primary`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ accountId })
+      });
+
+      const result = await response.json();
+      console.log('[BrokerService] Set primary trading account response:', result);
+
+      return result;
+    } catch (error) {
+      console.error('[BrokerService] Set primary trading account error:', error);
       return {
         success: false,
         message: 'Network error. Please check your connection and try again.'

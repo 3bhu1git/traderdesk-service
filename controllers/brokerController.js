@@ -246,9 +246,293 @@ const setPrimaryBroker = async (req, res) => {
   }
 };
 
+/**
+ * Add a new trading account
+ */
+const addTradingAccount = async (req, res) => {
+  try {
+    console.log('[BrokerController] addTradingAccount called with body:', req.body);
+    
+    const userId = req.user.userId;
+    const { 
+      brokerName, 
+      accountName, 
+      accountId, 
+      accountType, 
+      apiKey, 
+      accessToken, 
+      balance, 
+      notes 
+    } = req.body;
+
+    if (!brokerName || !accountName || !accountId) {
+      console.log('[BrokerController] Missing required fields for trading account');
+      return res.status(400).json({
+        success: false,
+        message: 'Broker name, account name, and account ID are required'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log('[BrokerController] User not found:', userId);
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if account already exists
+    const existingAccount = user.tradingAccounts.find(
+      account => account.accountId === accountId && account.brokerName === brokerName
+    );
+    
+    if (existingAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Trading account already exists'
+      });
+    }
+
+    const tradingAccountData = {
+      brokerName,
+      accountName,
+      accountId,
+      accountType: accountType || 'Combined',
+      apiKey: apiKey || '',
+      accessToken: accessToken || '',
+      balance: balance || 0,
+      notes: notes || '',
+      isActive: true
+    };
+
+    await user.addTradingAccount(tradingAccountData);
+
+    logger.info(`Trading account added for user: ${userId}, broker: ${brokerName}, accountId: ${accountId}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Trading account added successfully',
+      data: {
+        accountId,
+        brokerName,
+        accountName,
+        accountType: tradingAccountData.accountType
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error adding trading account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while adding trading account'
+    });
+  }
+};
+
+/**
+ * Get all trading accounts
+ */
+const getTradingAccounts = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const user = await User.findById(userId).select('tradingAccounts');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const accounts = user.tradingAccounts.map(account => ({
+      id: account._id,
+      brokerName: account.brokerName,
+      accountName: account.accountName,
+      accountId: account.accountId,
+      accountType: account.accountType,
+      isActive: account.isActive,
+      isPrimary: account.isPrimary,
+      isLive: account.isLive || false,
+      accessToken: account.accessToken,
+      tags: account.tags || [],
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        accounts,
+        totalAccounts: accounts.length
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error fetching trading accounts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trading accounts'
+    });
+  }
+};
+
+/**
+ * Update a trading account
+ */
+const updateTradingAccount = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { accountId } = req.params;
+    const updateData = req.body;
+
+    if (!accountId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account ID is required'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const account = user.tradingAccounts.find(acc => acc._id.toString() === accountId);
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trading account not found'
+      });
+    }
+
+    await user.updateTradingAccount(accountId, updateData);
+
+    logger.info(`Trading account updated for user: ${userId}, accountId: ${accountId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Trading account updated successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error updating trading account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update trading account'
+    });
+  }
+};
+
+/**
+ * Delete a trading account
+ */
+const deleteTradingAccount = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { accountId } = req.params;
+
+    if (!accountId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account ID is required'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const account = user.tradingAccounts.find(acc => acc._id.toString() === accountId);
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trading account not found'
+      });
+    }
+
+    await user.removeTradingAccount(accountId);
+
+    logger.info(`Trading account deleted for user: ${userId}, accountId: ${accountId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Trading account deleted successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error deleting trading account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete trading account'
+    });
+  }
+};
+
+/**
+ * Set primary trading account
+ */
+const setPrimaryTradingAccount = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { accountId } = req.body;
+
+    if (!accountId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account ID is required'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const account = user.tradingAccounts.find(acc => acc._id.toString() === accountId);
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trading account not found'
+      });
+    }
+
+    await user.setPrimaryTradingAccount(accountId);
+
+    logger.info(`Primary trading account set for user: ${userId}, accountId: ${accountId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Primary trading account updated successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error setting primary trading account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to set primary trading account'
+    });
+  }
+};
+
 module.exports = {
   connectDhan,
   disconnectDhan,
   getBrokerConnections,
-  setPrimaryBroker
+  setPrimaryBroker,
+  addTradingAccount,
+  getTradingAccounts,
+  updateTradingAccount,
+  deleteTradingAccount,
+  setPrimaryTradingAccount
 };
