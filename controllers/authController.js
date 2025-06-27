@@ -122,6 +122,7 @@ const verifyOTPAndLogin = async (req, res) => {
         isActive: true,
         loginMethod: 'phone',
         registrationDate: new Date(),
+        isProfileComplete: false, // New users need to complete profile
         brokerAccounts: []
       };
 
@@ -153,6 +154,9 @@ const verifyOTPAndLogin = async (req, res) => {
           isActive: user.isActive,
           loginMethod: 'phone',
           registrationDate: user.createdAt,
+          isProfileComplete: user.isProfileComplete,
+          tradingExperience: user.tradingExperience,
+          tradingStyle: user.tradingStyle,
           brokerAccounts: user.brokerAccounts
         },
         token,

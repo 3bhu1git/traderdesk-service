@@ -8,6 +8,7 @@ interface AuthContextType {
   loginWithGoogle: (userData: Partial<User>) => Promise<boolean>;
   logout: () => void;
   sendOTP: (phone: string) => Promise<boolean>;
+  updateUser: (userData: User) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -190,7 +191,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isPaidUser: true,
         deviceId: generateDeviceId(),
         sessionId: generateSessionId(),
-        sessionExpiry
+        sessionExpiry,
+        isProfileComplete: backendUser.isProfileComplete,
+        tradingExperience: backendUser.tradingExperience as any,
+        tradingStyle: backendUser.tradingStyle as any
       };
 
       setUser(userData);
@@ -263,6 +267,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateUser = (userData: User) => {
+    setUser(userData);
+    localStorage.setItem('traderdesk_user', JSON.stringify(userData));
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem('traderdesk_user');
@@ -281,6 +290,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loginWithGoogle,
     logout,
     sendOTP,
+    updateUser,
     isAuthenticated: !!user,
     isLoading
   };

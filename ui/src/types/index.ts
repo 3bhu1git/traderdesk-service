@@ -11,6 +11,9 @@ export interface User {
   deviceId?: string;
   sessionId?: string;
   sessionExpiry?: Date;
+  isProfileComplete?: boolean;
+  tradingExperience?: 'Beginner' | 'Intermediate' | 'Advanced' | 'Professional';
+  tradingStyle?: 'Day Trading' | 'Swing Trading' | 'Position Trading' | 'Scalping';
 }
 
 export interface Admin {

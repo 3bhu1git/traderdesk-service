@@ -1,22 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Phone, Shield, Clock, Smartphone, Edit, Save, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import UserService from '../services/userService';
 
 const Profile: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { currentPlan } = useSubscription();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(!user?.isProfileComplete); // Auto-edit if profile incomplete
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState('');
   const [formData, setFormData] = useState({
-    name: 'Trading Professional',
-    email: 'trader@example.com',
-    experience: 'Intermediate',
-    tradingStyle: 'Swing Trading'
+    name: user?.name || '',
+    email: user?.email || '',
+    tradingExperience: user?.tradingExperience || 'Intermediate' as const,
+    tradingStyle: user?.tradingStyle || 'Swing Trading' as const
   });
 
-  const handleSave = () => {
-    // In real app, save to backend
-    setIsEditing(false);
+  useEffect(() => {
+    // Initialize form data from user
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        tradingExperience: user.tradingExperience || 'Intermediate',
+        tradingStyle: user.tradingStyle || 'Swing Trading'
+      });
+    }
+  }, [user]);
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      setMessage('');
+
+      // Validate required fields
+      if (!formData.name || !formData.email || !formData.tradingExperience || !formData.tradingStyle) {
+        setMessage('All fields are required');
+        return;
+      }        // Update profile via API
+        const result = await UserService.updateProfile(formData);
+
+        if (result.success) {
+          setMessage('Profile updated successfully!');
+          setIsEditing(false);
+          
+          // Update local user data
+          if (result.data?.user) {
+            const updatedUser = {
+              ...user!,
+              name: result.data.user.name,
+              email: result.data.user.email,
+              tradingExperience: result.data.user.tradingExperience as any,
+              tradingStyle: result.data.user.tradingStyle as any,
+              isProfileComplete: result.data.user.isProfileComplete
+            };
+            
+            // Update user in context and localStorage
+            updateUser(updatedUser);
+            
+            // If profile is now complete and this was a forced edit, show success
+            if (result.data.user.isProfileComplete && !user?.isProfileComplete) {
+              setMessage('Profile completed! You can now access all features.');
+            }
+          }
+        
+        // Clear message after 3 seconds
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage(result.message || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      setMessage('Failed to update profile. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const sessionInfo = {
@@ -31,19 +90,41 @@ const Profile: React.FC = () => {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      {/* Profile Completion Notice */}
+      {!user?.isProfileComplete && (
+        <div className="bg-gradient-to-r from-orange-900/20 to-orange-800/20 border border-orange-700/30 rounded-sm p-4">
+          <div className="flex items-center space-x-2">
+            <Edit className="w-5 h-5 text-orange-400" />
+            <div>
+              <h3 className="font-semibold text-orange-300">Complete Your Profile</h3>
+              <p className="text-sm text-orange-300/80 mt-1">
+                Please complete your profile information to access all trading features.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-200">Profile Settings</h1>
-          <p className="text-slate-400 mt-1">Manage your account and preferences</p>
+          <p className="text-slate-400 mt-1">
+            {user?.isProfileComplete 
+              ? 'Manage your account and preferences' 
+              : 'Complete your profile to access all features'
+            }
+          </p>
         </div>
-        <button
-          onClick={() => setIsEditing(!isEditing)}
-          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-sm hover:from-green-700 hover:to-green-600 transition-all duration-200 shadow-lg hover:shadow-green-500/25"
-        >
-          {isEditing ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-          <span>{isEditing ? 'Cancel' : 'Edit Profile'}</span>
-        </button>
+        {user?.isProfileComplete && (
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-sm hover:from-green-700 hover:to-green-600 transition-all duration-200 shadow-lg hover:shadow-green-500/25"
+          >
+            {isEditing ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+            <span>{isEditing ? 'Cancel' : 'Edit Profile'}</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -95,15 +176,15 @@ const Profile: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Trading Experience</label>
                 <select
-                  value={formData.experience}
-                  onChange={(e) => setFormData({...formData, experience: e.target.value})}
+                  value={formData.tradingExperience}
+                  onChange={(e) => setFormData({...formData, tradingExperience: e.target.value as any})}
                   disabled={!isEditing}
                   className="w-full px-4 py-3 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 disabled:bg-slate-800/30 disabled:cursor-not-allowed"
                 >
-                  <option>Beginner</option>
-                  <option>Intermediate</option>
-                  <option>Advanced</option>
-                  <option>Professional</option>
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                  <option value="Professional">Professional</option>
                 </select>
               </div>
 
@@ -111,25 +192,37 @@ const Profile: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-300 mb-2">Trading Style</label>
                 <select
                   value={formData.tradingStyle}
-                  onChange={(e) => setFormData({...formData, tradingStyle: e.target.value})}
+                  onChange={(e) => setFormData({...formData, tradingStyle: e.target.value as any})}
                   disabled={!isEditing}
                   className="w-full px-4 py-3 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 disabled:bg-slate-800/30 disabled:cursor-not-allowed"
                 >
-                  <option>Day Trading</option>
-                  <option>Swing Trading</option>
-                  <option>Position Trading</option>
-                  <option>Scalping</option>
+                  <option value="Day Trading">Day Trading</option>
+                  <option value="Swing Trading">Swing Trading</option>
+                  <option value="Position Trading">Position Trading</option>
+                  <option value="Scalping">Scalping</option>
                 </select>
               </div>
             </div>
 
+            {/* Message Display */}
+            {message && (
+              <div className={`p-3 rounded-sm border text-sm ${
+                message.includes('success') || message.includes('completed')
+                  ? 'bg-green-900/20 border-green-700/30 text-green-300'
+                  : 'bg-red-900/20 border-red-700/30 text-red-300'
+              }`}>
+                {message}
+              </div>
+            )}
+
             {isEditing && (
               <button
                 onClick={handleSave}
-                className="w-full bg-gradient-to-r from-green-600 to-green-500 text-white py-3 rounded-sm font-semibold hover:from-green-700 hover:to-green-600 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-green-500/25"
+                disabled={isSaving}
+                className="w-full bg-gradient-to-r from-green-600 to-green-500 text-white py-3 rounded-sm font-semibold hover:from-green-700 hover:to-green-600 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="w-4 h-4" />
-                <span>Save Changes</span>
+                <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
               </button>
             )}
           </div>

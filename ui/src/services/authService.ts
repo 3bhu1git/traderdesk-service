@@ -16,6 +16,9 @@ export interface AuthResponse {
       loginMethod: string;
       registrationDate: string;
       lastLogin?: string;
+      isProfileComplete?: boolean;
+      tradingExperience?: string;
+      tradingStyle?: string;
       brokerAccounts: any[];
     };
     token: string;

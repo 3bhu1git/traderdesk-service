@@ -14,6 +14,7 @@ const portfolioRoutes = require('./routes/portfolio');
 const marketDataRoutes = require('./routes/marketData');
 const brokerRoutes = require('./routes/broker');
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/user');
 const WebSocketService = require('./services/websocket');
 const CronService = require('./services/cron');
 const { fetchHistoricalData } = require('./scripts/fetchHistoricalData');
@@ -100,6 +101,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUi
 // API routes
 // console.log('apiRoutes:', apiRoutes, 'Type:', typeof apiRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/market', marketDataRoutes);

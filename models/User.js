@@ -64,6 +64,20 @@ const userSchema = new Schema({
   lastLogin: {
     type: Date
   },
+  isProfileComplete: {
+    type: Boolean,
+    default: false
+  },
+  tradingExperience: {
+    type: String,
+    enum: ['Beginner', 'Intermediate', 'Advanced', 'Professional'],
+    required: false
+  },
+  tradingStyle: {
+    type: String,
+    enum: ['Day Trading', 'Swing Trading', 'Position Trading', 'Scalping'],
+    required: false
+  },
   brokerAccounts: [brokerAccountSchema],
   createdAt: {
     type: Date,

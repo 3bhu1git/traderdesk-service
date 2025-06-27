@@ -9,6 +9,7 @@ import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import AdminLogin from './pages/AdminLogin';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import ProfileGuard from './components/common/ProfileGuard';
 import LoadingScreen from './components/common/LoadingScreen';
 import NotFound from './pages/NotFound';
 
@@ -48,47 +49,57 @@ function App() {
                   <Route path="/dashboard" element={<Navigate to="/market" replace />} />
                   <Route path="/trading-desk" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <TradingDesk />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <TradingDesk />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/screener" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Screener />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Screener />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/indicators" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Indicators />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Indicators />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/tutorials" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Tutorials />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Tutorials />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/subscription" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Subscription />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Subscription />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/profile" element={
@@ -102,38 +113,46 @@ function App() {
                   } />
                   <Route path="/performance" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Performance />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Performance />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/broker" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Broker />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Broker />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/chat" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Chat />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Chat />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   <Route path="/market" element={
                     <ProtectedRoute>
-                      <Layout>
-                        <Suspense fallback={<LoadingScreen />}>
-                          <Market />
-                        </Suspense>
-                      </Layout>
+                      <ProfileGuard>
+                        <Layout>
+                          <Suspense fallback={<LoadingScreen />}>
+                            <Market />
+                          </Suspense>
+                        </Layout>
+                      </ProfileGuard>
                     </ProtectedRoute>
                   } />
                   
