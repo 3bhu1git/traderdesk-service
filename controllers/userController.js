@@ -17,6 +17,17 @@ const updateProfile = async (req, res) => {
       });
     }
 
+    // Check if email is being changed and if it already exists
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email address is already registered with another account'
+        });
+      }
+    }
+
     // Update fields if provided
     if (name) user.name = name;
     if (email) user.email = email;
@@ -61,6 +72,23 @@ const updateProfile = async (req, res) => {
 
   } catch (error) {
     logger.error('Error updating user profile:', error);
+    
+    // Handle MongoDB duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      if (field === 'email') {
+        return res.status(400).json({
+          success: false,
+          message: 'Email address is already registered with another account'
+        });
+      } else if (field === 'phone') {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number is already registered with another account'
+        });
+      }
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Failed to update user profile'

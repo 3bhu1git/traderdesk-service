@@ -61,17 +61,14 @@ class UserService {
       const result = await response.json();
       console.log('[UserService] Update profile response:', result);
 
-      if (!response.ok) {
-        console.error('[UserService] Update profile HTTP error:', response.status, result.message);
-        throw new Error(result.message || 'Failed to update profile');
-      }
-
+      // Return the result directly, whether success or error
+      // The backend properly sets success: false for errors
       return result;
     } catch (error) {
-      console.error('[UserService] Update profile error:', error);
+      console.error('[UserService] Update profile network error:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to update profile'
+        message: 'Network error. Please check your connection and try again.'
       };
     }
   }
@@ -88,17 +85,13 @@ class UserService {
       const result = await response.json();
       console.log('[UserService] Get profile response:', result);
 
-      if (!response.ok) {
-        console.error('[UserService] Get profile HTTP error:', response.status, result.message);
-        throw new Error(result.message || 'Failed to get profile');
-      }
-
+      // Return the result directly, whether success or error
       return result;
     } catch (error) {
-      console.error('[UserService] Get profile error:', error);
+      console.error('[UserService] Get profile network error:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to get profile'
+        message: 'Network error. Please check your connection and try again.'
       };
     }
   }
