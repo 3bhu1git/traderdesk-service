@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import { AdminProvider } from './context/AdminContext';
 import { TradeProvider } from './context/TradeContext';
+import { NotificationProvider, NotificationContainer } from './context/NotificationContext';
 import Layout from './components/Layout/Layout';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
@@ -33,8 +34,10 @@ function App() {
         <SubscriptionProvider>
           <AdminProvider>
             <TradeProvider>
-              <div className="min-h-screen bg-white">
-                <Routes>
+              <NotificationProvider>
+                <div className="min-h-screen bg-white">
+                  <NotificationContainer />
+                  <Routes>
                   {/* Public Routes */}
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/auth" element={<AuthPage />} />
@@ -160,6 +163,7 @@ function App() {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </div>
+            </NotificationProvider>
             </TradeProvider>
           </AdminProvider>
         </SubscriptionProvider>

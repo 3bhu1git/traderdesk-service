@@ -347,6 +347,24 @@ class BrokerService {
       return null;
     }
   }
+
+  /**
+   * Get live trading accounts count
+   */
+  public static async getLiveAccountsCount(): Promise<{ count: number; total: number }> {
+    try {
+      const result = await this.getTradingAccounts();
+      if (result.success && result.data?.accounts) {
+        const accounts = result.data.accounts as TradingAccount[];
+        const liveCount = accounts.filter(account => account.isLive).length;
+        return { count: liveCount, total: accounts.length };
+      }
+      return { count: 0, total: 0 };
+    } catch (error) {
+      console.error('[BrokerService] Get live accounts count error:', error);
+      return { count: 0, total: 0 };
+    }
+  }
 }
 
 export default BrokerService;

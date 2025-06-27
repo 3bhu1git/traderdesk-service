@@ -1,1 +1,5 @@
+package-lock.json
 node_modules
+ui/dist
+ui/node_modules
+ui/package-lock.json

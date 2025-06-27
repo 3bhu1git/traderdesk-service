@@ -22,6 +22,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const [marketStatus, setMarketStatus] = useState<'open' | 'closed'>('closed');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [connectedBrokers, setConnectedBrokers] = useState<any[]>([]);
+  const [liveAccountsData, setLiveAccountsData] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
 
   // Mock alerts data
   const alerts = [
@@ -125,6 +126,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       }
       
       setConnectedBrokers(brokers);
+      
+      // Get live accounts data
+      const liveData = await BrokerService.getLiveAccountsCount();
+      setLiveAccountsData(liveData);
     };
     
     checkConnectedBrokers();
@@ -244,11 +249,17 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               className="flex items-center space-x-1.5 px-2 py-1.5 bg-slate-800/60 border border-slate-600/50 rounded-sm hover:bg-slate-700/60 transition-colors text-xs"
             >
               <LinkIcon className="w-3 h-3 text-green-400" />
-              <span className="text-slate-300 font-mono">BROKERS</span>
+              <span className="text-slate-300 font-mono">ACCOUNTS</span>
+              {liveAccountsData.total > 0 && (
+                <span className="text-green-400 font-mono text-xs">
+                  {liveAccountsData.count}/{liveAccountsData.total}
+                </span>
+              )}
+              {/* Data Integration Status - Green when connected */}
               {connectedBrokers.length > 0 ? (
-                <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" title="Data integration active"></div>
               ) : (
-                <div className="w-1.5 h-1.5 bg-red-400 rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-red-400 rounded-full" title="No data integration"></div>
               )}
             </button>
 

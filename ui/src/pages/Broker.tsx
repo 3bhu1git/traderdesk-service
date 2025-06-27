@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Check, AlertCircle, Loader, Shield, RefreshCw, Settings, X, Plus, Database, CreditCard, Edit3, Trash2, Star, Search, Power } from 'lucide-react';
+import { Check, Loader, Shield, RefreshCw, Settings, X, Plus, Database, CreditCard, Edit3, Trash2, Star, Search, Power } from 'lucide-react';
 import BrokerService, { BrokerConnection, TradingAccount, TradingAccountData } from '../services/brokerService';
+import { useNotifications } from '../context/NotificationContext';
 
 const Broker: React.FC = () => {
+  const { showSuccess, showError } = useNotifications();
   const [activeTab, setActiveTab] = useState<'data' | 'trading'>('data');
   
   // Data Integration State
@@ -34,10 +36,6 @@ const Broker: React.FC = () => {
     tags: [],
     isLive: false
   });
-  
-  // Common State
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   // Check connections on component mount
   useEffect(() => {
@@ -105,9 +103,9 @@ const Broker: React.FC = () => {
         const accounts = result.data?.accounts || [];
         setTradingAccounts(accounts);
         
-        // Update master toggle based on accounts
-        const allLive = accounts.length > 0 && accounts.every((account: TradingAccount) => account.isLive);
-        setMasterLiveToggle(allLive);
+        // Update master toggle based on accounts - true if ANY account is live
+        const anyLive = accounts.length > 0 && accounts.some((account: TradingAccount) => account.isLive);
+        setMasterLiveToggle(anyLive);
       } else {
         console.error('Failed to load trading accounts:', result.message);
       }
@@ -136,15 +134,14 @@ const Broker: React.FC = () => {
       const failedUpdates = results.filter(result => !result.success);
       
       if (failedUpdates.length > 0) {
-        setError(`Failed to update ${failedUpdates.length} account(s)`);
+        showError('Update Failed', `Failed to update ${failedUpdates.length} account(s)`);
         // Reload to get accurate state
         await loadTradingAccounts();
       } else {
-        setSuccess(`All accounts ${newState ? 'enabled for' : 'disabled from'} live trading`);
-        setTimeout(() => setSuccess(''), 2000);
+        showSuccess('Success', `All accounts ${newState ? 'enabled for' : 'disabled from'} live trading`);
       }
     } catch (error) {
-      setError('Failed to update accounts. Please try again.');
+      showError('Update Failed', 'Failed to update accounts. Please try again.');
       // Revert master toggle and reload accounts
       setMasterLiveToggle(!newState);
       await loadTradingAccounts();
@@ -161,12 +158,11 @@ const Broker: React.FC = () => {
 
   const handleDhanConnect = async () => {
     if (!dhanCredentials.clientId || !dhanCredentials.accessToken) {
-      setError('Please fill in all required fields');
+      showError('Validation Error', 'Please fill in all required fields');
       return;
     }
 
     setIsLoading(true);
-    setError('');
 
     try {
       const result = await BrokerService.connectDhan({
@@ -176,7 +172,7 @@ const Broker: React.FC = () => {
       });
 
       if (result.success) {
-        setSuccess('Successfully connected to Dhan broker!');
+        showSuccess('Connection Successful', 'Successfully connected to Dhan broker!');
         setIsDhanConnected(true);
         setShowDhanForm(false);
         setDhanCredentials({
@@ -184,15 +180,12 @@ const Broker: React.FC = () => {
           clientId: dhanCredentials.clientId,
           accessToken: '********' // Mask the token after success
         });
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError(result.message || 'Failed to connect to Dhan broker');
+        showError('Connection Failed', result.message || 'Failed to connect to Dhan broker');
       }
     } catch (error) {
       console.error('Dhan connect error:', error);
-      setError('Failed to connect to Dhan broker. Please try again.');
+      showError('Connection Failed', 'Failed to connect to Dhan broker. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -200,28 +193,24 @@ const Broker: React.FC = () => {
 
   const handleDhanDisconnect = async () => {
     setIsLoading(true);
-    setError('');
 
     try {
       const result = await BrokerService.disconnectDhan();
       
       if (result.success) {
-        setSuccess('Successfully disconnected from Dhan broker');
+        showSuccess('Disconnection Successful', 'Successfully disconnected from Dhan broker');
         setIsDhanConnected(false);
         setDhanCredentials({
           customer: '',
           clientId: '',
           accessToken: ''
         });
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError(result.message || 'Failed to disconnect from Dhan broker');
+        showError('Disconnection Failed', result.message || 'Failed to disconnect from Dhan broker');
       }
     } catch (error) {
       console.error('Dhan disconnect error:', error);
-      setError('Failed to disconnect from Dhan broker. Please try again.');
+      showError('Disconnection Failed', 'Failed to disconnect from Dhan broker. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -243,13 +232,10 @@ const Broker: React.FC = () => {
       });
       
       if (result.success) {
-        setSuccess(`Account ${!currentLiveStatus ? 'enabled for' : 'disabled from'} live trading`);
+        showSuccess('Status Updated', `Account ${!currentLiveStatus ? 'enabled for' : 'disabled from'} live trading`);
         
         // Refresh trading accounts to ensure consistency and update master toggle
         await loadTradingAccounts();
-        
-        // Clear success message after 2 seconds
-        setTimeout(() => setSuccess(''), 2000);
       } else {
         // Revert optimistic update on failure
         setTradingAccounts(prev => 
@@ -259,7 +245,7 @@ const Broker: React.FC = () => {
               : account
           )
         );
-        setError(result.message || 'Failed to update live trading status');
+        showError('Update Failed', result.message || 'Failed to update live trading status');
       }
     } catch (error) {
       // Revert optimistic update on error
@@ -271,36 +257,32 @@ const Broker: React.FC = () => {
         )
       );
       console.error('Toggle live trading error:', error);
-      setError('Failed to update live trading status. Please try again.');
+      showError('Update Failed', 'Failed to update live trading status. Please try again.');
     }
   };
 
   const handleAddTradingAccount = async () => {
     if (!tradingAccountForm.brokerName || !tradingAccountForm.accountName || !tradingAccountForm.accountId || !tradingAccountForm.accessToken) {
-      setError('Please fill in all required fields');
+      showError('Validation Error', 'Please fill in all required fields');
       return;
     }
 
     setIsLoading(true);
-    setError('');
 
     try {
       const result = await BrokerService.addTradingAccount(tradingAccountForm);
       
       if (result.success) {
-        setSuccess('Trading account added successfully!');
+        showSuccess('Account Added', 'Trading account added successfully!');
         setShowTradingForm(false);
         resetForm();
         await loadTradingAccounts();
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError(result.message || 'Failed to add trading account');
+        showError('Add Failed', result.message || 'Failed to add trading account');
       }
     } catch (error) {
       console.error('Add trading account error:', error);
-      setError('Failed to add trading account. Please try again.');
+      showError('Add Failed', 'Failed to add trading account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -308,31 +290,27 @@ const Broker: React.FC = () => {
 
   const handleUpdateTradingAccount = async () => {
     if (!editingAccount || !tradingAccountForm.brokerName || !tradingAccountForm.accountName || !tradingAccountForm.accountId || !tradingAccountForm.accessToken) {
-      setError('Please fill in all required fields');
+      showError('Validation Error', 'Please fill in all required fields');
       return;
     }
 
     setIsLoading(true);
-    setError('');
 
     try {
       const result = await BrokerService.updateTradingAccount(editingAccount.id, tradingAccountForm);
       
       if (result.success) {
-        setSuccess('Trading account updated successfully!');
+        showSuccess('Account Updated', 'Trading account updated successfully!');
         setShowTradingForm(false);
         setEditingAccount(null);
         resetForm();
         await loadTradingAccounts();
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError(result.message || 'Failed to update trading account');
+        showError('Update Failed', result.message || 'Failed to update trading account');
       }
     } catch (error) {
       console.error('Update trading account error:', error);
-      setError('Failed to update trading account. Please try again.');
+      showError('Update Failed', 'Failed to update trading account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -344,23 +322,19 @@ const Broker: React.FC = () => {
     }
 
     setIsLoading(true);
-    setError('');
 
     try {
       const result = await BrokerService.deleteTradingAccount(accountId);
       
       if (result.success) {
-        setSuccess('Trading account deleted successfully');
+        showSuccess('Account Deleted', 'Trading account deleted successfully');
         await loadTradingAccounts();
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError(result.message || 'Failed to delete trading account');
+        showError('Delete Failed', result.message || 'Failed to delete trading account');
       }
     } catch (error) {
       console.error('Delete trading account error:', error);
-      setError('Failed to delete trading account. Please try again.');
+      showError('Delete Failed', 'Failed to delete trading account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -368,23 +342,19 @@ const Broker: React.FC = () => {
 
   const handleSetPrimaryTradingAccount = async (accountId: string) => {
     setIsLoading(true);
-    setError('');
 
     try {
       const result = await BrokerService.setPrimaryTradingAccount(accountId);
       
       if (result.success) {
-        setSuccess('Primary trading account updated successfully');
+        showSuccess('Primary Account Set', 'Primary trading account updated successfully');
         await loadTradingAccounts();
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError(result.message || 'Failed to set primary trading account');
+        showError('Update Failed', result.message || 'Failed to set primary trading account');
       }
     } catch (error) {
       console.error('Set primary trading account error:', error);
-      setError('Failed to set primary trading account. Please try again.');
+      showError('Update Failed', 'Failed to set primary trading account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -422,7 +392,6 @@ const Broker: React.FC = () => {
     setShowTradingForm(false);
     setShowDhanForm(false);
     resetForm();
-    setError('');
   };
 
   const addTag = (tag: string) => {
@@ -454,14 +423,14 @@ const Broker: React.FC = () => {
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="professional-card p-6 bg-slate-800/50 border border-slate-700/50">
-          <div className="flex items-center justify-between mb-4">
+      <div className="professional-card p-4 md:p-6 bg-slate-800/50 border border-slate-700/50">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 space-y-3 md:space-y-0">
             <div>
-              <h1 className="text-3xl font-bold text-slate-100 mb-2">Broker Integration</h1>
-              <p className="text-slate-400">Connect your trading accounts and manage broker integrations</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-100 mb-2">Broker Integration</h1>
+              <p className="text-slate-400 text-sm md:text-base">Connect your trading accounts and manage broker integrations</p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Settings className="w-6 h-6 text-slate-400" />
+            <div className="flex items-center space-x-2 self-start md:self-auto">
+              <Settings className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />
             </div>
           </div>
 
@@ -469,49 +438,30 @@ const Broker: React.FC = () => {
           <div className="flex space-x-1 bg-slate-700/30 p-1 rounded-lg">
             <button
               onClick={() => setActiveTab('data')}
-              className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-md text-sm font-semibold transition-all duration-200 ${
+              className={`flex-1 flex items-center justify-center space-x-1 md:space-x-2 px-2 md:px-4 py-2 md:py-3 rounded-md text-xs md:text-sm font-semibold transition-all duration-200 ${
                 activeTab === 'data'
                   ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
               }`}
             >
-              <Database className="w-4 h-4" />
-              <span>Data Integration</span>
+              <Database className="w-3 h-3 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Data Integration</span>
+              <span className="sm:hidden">Data</span>
             </button>
             <button
               onClick={() => setActiveTab('trading')}
-              className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-md text-sm font-semibold transition-all duration-200 ${
+              className={`flex-1 flex items-center justify-center space-x-1 md:space-x-2 px-2 md:px-4 py-2 md:py-3 rounded-md text-xs md:text-sm font-semibold transition-all duration-200 ${
                 activeTab === 'trading'
                   ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
               }`}
             >
-              <CreditCard className="w-4 h-4" />
-              <span>Trading Accounts</span>
+              <CreditCard className="w-3 h-3 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Trading Accounts</span>
+              <span className="sm:hidden">Trading</span>
             </button>
           </div>
         </div>
-
-        {/* Success/Error Messages */}
-        {error && (
-          <div className="professional-card p-4 bg-red-900/20 border border-red-700/50 flex items-center space-x-2">
-            <AlertCircle className="w-5 h-5 text-red-400" />
-            <span className="text-red-300">{error}</span>
-            <button onClick={() => setError('')} className="ml-auto text-red-400 hover:text-red-300">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {success && (
-          <div className="professional-card p-4 bg-green-900/20 border border-green-700/50 flex items-center space-x-2">
-            <Check className="w-5 h-5 text-green-400" />
-            <span className="text-green-300">{success}</span>
-            <button onClick={() => setSuccess('')} className="ml-auto text-green-400 hover:text-green-300">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
 
         {/* Tab Content */}
         <div className="professional-card p-6 bg-slate-800/30 border border-slate-700/50">
@@ -664,16 +614,16 @@ const Broker: React.FC = () => {
 
           {activeTab === 'trading' && (
             <div>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 md:mb-6 space-y-3 md:space-y-0">
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-200">Trading Accounts</h2>
-                  <p className="text-sm text-slate-400">Manage accounts for order execution and live trading</p>
+                  <h2 className="text-lg md:text-xl font-semibold text-slate-200">Trading Accounts</h2>
+                  <p className="text-xs md:text-sm text-slate-400">Manage accounts for order execution and live trading</p>
                 </div>
-                <div className="flex items-center space-x-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
                   {/* Master Live Toggle */}
                   {tradingAccounts.length > 0 && (
-                    <div className="flex items-center space-x-2 px-3 py-2 bg-slate-800/50 border border-slate-600/50 rounded-sm">
-                      <span className="text-sm text-slate-300">Master Live Toggle:</span>
+                    <div className="flex items-center space-x-2 px-2 md:px-3 py-1.5 md:py-2 bg-slate-800/50 border border-slate-600/50 rounded-sm">
+                      <span className="text-xs md:text-sm text-slate-300 whitespace-nowrap">Master Live:</span>
                       <div className="relative" title={`${masterLiveToggle ? 'Disable' : 'Enable'} all accounts for live trading`}>
                         <input
                           type="checkbox"
@@ -684,38 +634,39 @@ const Broker: React.FC = () => {
                         />
                         <label
                           htmlFor="master-live-toggle"
-                          className={`relative inline-flex items-center h-6 w-11 rounded-full cursor-pointer transition-all duration-200 ${
+                          className={`relative inline-flex items-center h-5 w-9 md:h-6 md:w-11 rounded-full cursor-pointer transition-all duration-200 ${
                             masterLiveToggle
                               ? 'bg-gradient-to-r from-green-600 to-green-500 shadow-lg shadow-green-500/25'
                               : 'bg-slate-600'
                           }`}
                         >
                           <span
-                            className={`inline-block w-4 h-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
-                              masterLiveToggle ? 'translate-x-6' : 'translate-x-1'
+                            className={`inline-block w-3 h-3 md:w-4 md:h-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+                              masterLiveToggle ? 'translate-x-5 md:translate-x-6' : 'translate-x-1'
                             }`}
                           />
                         </label>
                       </div>
-                      <Power className={`w-4 h-4 ${masterLiveToggle ? 'text-green-400' : 'text-slate-400'}`} />
+                      <Power className={`w-3 h-3 md:w-4 md:h-4 ${masterLiveToggle ? 'text-green-400' : 'text-slate-400'}`} />
                     </div>
                   )}
                   
                   <button
                     onClick={() => setShowTradingForm(true)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-sm font-semibold hover:from-blue-700 hover:to-blue-600 transition-all duration-200 shadow-lg hover:shadow-blue-500/25"
+                    className="flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-sm font-semibold hover:from-blue-700 hover:to-blue-600 transition-all duration-200 shadow-lg hover:shadow-blue-500/25 text-sm md:text-base"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Account</span>
+                    <Plus className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden sm:inline">Add Account</span>
+                    <span className="sm:hidden">Add</span>
                   </button>
                 </div>
               </div>
 
               {/* Search Box */}
               {tradingAccounts.length > 1 && (
-                <div className="mb-6">
+                <div className="mb-4 md:mb-6">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400" />
                     <input
                       type="text"
                       value={searchQuery}
@@ -731,37 +682,37 @@ const Broker: React.FC = () => {
               {filteredAccounts.length > 0 ? (
                 <div className="space-y-4">
                   {filteredAccounts.map((account) => (
-                    <div key={account.id} className={`p-4 border rounded-sm ${account.isPrimary ? 'border-green-700/50 bg-green-900/20' : 'border-slate-700/50 bg-slate-800/30'} hover:border-slate-600/50 transition-colors`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-500 rounded-sm flex items-center justify-center">
+                    <div key={account.id} className={`p-3 md:p-4 border rounded-sm ${account.isPrimary ? 'border-green-700/50 bg-green-900/20' : 'border-slate-700/50 bg-slate-800/30'} hover:border-slate-600/50 transition-colors`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                        <div className="flex items-start space-x-3 flex-1">
+                          <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-600 to-blue-500 rounded-sm flex items-center justify-center flex-shrink-0">
                             <span className="text-white font-bold text-xs">{account.brokerName.slice(0, 3).toUpperCase()}</span>
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <h4 className="font-semibold text-slate-200">{account.accountName}</h4>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <h4 className="font-semibold text-slate-200 text-sm md:text-base truncate">{account.accountName}</h4>
                               {account.isPrimary && (
-                                <div className="flex items-center space-x-1 px-2 py-1 bg-green-900/30 border border-green-700/50 rounded-sm">
-                                  <Star className="w-3 h-3 text-green-400" />
+                                <div className="flex items-center space-x-1 px-1.5 md:px-2 py-0.5 md:py-1 bg-green-900/30 border border-green-700/50 rounded-sm">
+                                  <Star className="w-2.5 h-2.5 md:w-3 md:h-3 text-green-400" />
                                   <span className="text-xs text-green-300">Primary</span>
                                 </div>
                               )}
                               {account.isLive && (
-                                <div className="flex items-center space-x-1 px-2 py-1 bg-green-900/30 border border-green-700/50 rounded-sm">
-                                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                                  <span className="text-xs text-green-300">Live Trading</span>
+                                <div className="flex items-center space-x-1 px-1.5 md:px-2 py-0.5 md:py-1 bg-green-900/30 border border-green-700/50 rounded-sm">
+                                  <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                  <span className="text-xs text-green-300">Live</span>
                                 </div>
                               )}
                             </div>
-                            <p className="text-sm text-slate-400 mb-1">{account.brokerName} • {account.accountType}</p>
-                            <p className="text-sm text-slate-400 mb-2">Account ID: {account.accountId}</p>
+                            <p className="text-xs md:text-sm text-slate-400 mb-1">{account.brokerName} • {account.accountType}</p>
+                            <p className="text-xs md:text-sm text-slate-400 mb-2 truncate">ID: {account.accountId}</p>
                             {account.accessToken && (
-                              <p className="text-sm text-slate-400 mb-2">API: Connected</p>
+                              <p className="text-xs md:text-sm text-slate-400 mb-2">API: Connected</p>
                             )}
                             {account.tags && account.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {account.tags.map((tag, index) => (
-                                  <span key={index} className="inline-block px-2 py-1 bg-blue-900/30 border border-blue-700/50 rounded-sm text-xs text-blue-300">
+                                  <span key={index} className="inline-block px-1.5 md:px-2 py-0.5 md:py-1 bg-blue-900/30 border border-blue-700/50 rounded-sm text-xs text-blue-300">
                                     {tag}
                                   </span>
                                 ))}
@@ -770,56 +721,60 @@ const Broker: React.FC = () => {
                           </div>
                         </div>
                         
-                        <div className="flex items-center space-x-2">
-                          {!account.isPrimary && (
-                            <button
-                              onClick={() => handleSetPrimaryTradingAccount(account.id)}
-                              className="p-2 hover:bg-slate-700 rounded-sm transition-colors text-slate-400 hover:text-green-400"
-                              title="Set as primary"
-                            >
-                              <Star className="w-4 h-4" />
-                            </button>
-                          )}
-                          
-                          {/* Live Trading Toggle */}
-                          <div className="relative" title={`${account.isLive ? 'Disable' : 'Enable'} live trading`}>
-                            <input
-                              type="checkbox"
-                              id={`live-${account.id}`}
-                              checked={account.isLive}
-                              onChange={() => handleToggleLiveTrading(account.id, account.isLive)}
-                              className="sr-only"
-                            />
-                            <label
-                              htmlFor={`live-${account.id}`}
-                              className={`relative inline-flex items-center h-5 w-9 rounded-full cursor-pointer transition-all duration-200 ${
-                                account.isLive
-                                  ? 'bg-gradient-to-r from-green-600 to-green-500 shadow-md shadow-green-500/25'
+                        <div className="flex items-center justify-between sm:justify-end space-x-2">
+                          <div className="flex items-center space-x-1 sm:space-x-2">
+                            {!account.isPrimary && (
+                              <button
+                                onClick={() => handleSetPrimaryTradingAccount(account.id)}
+                                className="p-1.5 md:p-2 hover:bg-slate-700 rounded-sm transition-colors text-slate-400 hover:text-green-400"
+                                title="Set as primary"
+                              >
+                                <Star className="w-3 h-3 md:w-4 md:h-4" />
+                              </button>
+                            )}
+                            
+                            {/* Live Trading Toggle */}
+                            <div className="relative" title={`${account.isLive ? 'Disable' : 'Enable'} live trading`}>
+                              <input
+                                type="checkbox"
+                                id={`live-${account.id}`}
+                                checked={account.isLive}
+                                onChange={() => handleToggleLiveTrading(account.id, account.isLive)}
+                                className="sr-only"
+                              />
+                              <label
+                                htmlFor={`live-${account.id}`}
+                                className={`relative inline-flex items-center h-4 w-7 md:h-5 md:w-9 rounded-full cursor-pointer transition-all duration-200 ${
+                                  account.isLive
+                                    ? 'bg-gradient-to-r from-green-600 to-green-500 shadow-md shadow-green-500/25'
                                   : 'bg-slate-600 hover:bg-slate-500'
                               }`}
                             >
                               <span
-                                className={`inline-block w-3 h-3 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                                  account.isLive ? 'translate-x-5' : 'translate-x-1'
+                                className={`inline-block w-2.5 h-2.5 md:w-3 md:h-3 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                                  account.isLive ? 'translate-x-3.5 md:translate-x-5' : 'translate-x-0.5 md:translate-x-1'
                                 }`}
                               />
                             </label>
                           </div>
+                          </div>
 
-                          <button
-                            onClick={() => startEditingAccount(account)}
-                            className="p-2 hover:bg-slate-700 rounded-sm transition-colors text-slate-400 hover:text-blue-400"
-                            title="Edit account"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTradingAccount(account.id)}
-                            className="p-2 hover:bg-slate-700 rounded-sm transition-colors text-slate-400 hover:text-red-400"
-                            title="Delete account"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center space-x-1 sm:space-x-2">
+                            <button
+                              onClick={() => startEditingAccount(account)}
+                              className="p-1.5 md:p-2 hover:bg-slate-700 rounded-sm transition-colors text-slate-400 hover:text-blue-400"
+                              title="Edit account"
+                            >
+                              <Edit3 className="w-3 h-3 md:w-4 md:h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTradingAccount(account.id)}
+                              className="p-1.5 md:p-2 hover:bg-slate-700 rounded-sm transition-colors text-slate-400 hover:text-red-400"
+                              title="Delete account"
+                            >
+                              <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
