@@ -13,6 +13,7 @@ const apiRoutes = require('./routes/api');
 const portfolioRoutes = require('./routes/portfolio');
 const marketDataRoutes = require('./routes/marketData');
 const brokerRoutes = require('./routes/broker');
+const brokersRoutes = require('./routes/brokers');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const WebSocketService = require('./services/websocket');
@@ -102,6 +103,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUi
 // console.log('apiRoutes:', apiRoutes, 'Type:', typeof apiRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/brokers', brokersRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/market', marketDataRoutes);

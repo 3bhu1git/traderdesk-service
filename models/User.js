@@ -19,6 +19,10 @@ const brokerAccountSchema = new Schema({
     type: String,
     required: true
   },
+  customer: {
+    type: String,
+    required: false
+  },
   isPrimary: {
     type: Boolean,
     default: false

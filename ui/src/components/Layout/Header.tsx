@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Menu, ChevronDown, Link as LinkIcon, MessageSquare, X, Activity, TrendingUp, AlertTriangle, Settings } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { DhanApiService } from '../../services/dhanApiService';
+import BrokerService from '../../services/brokerService';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -106,14 +106,13 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
 
   // Check for connected brokers
   useEffect(() => {
-    const checkConnectedBrokers = () => {
+    const checkConnectedBrokers = async () => {
       const brokers = [];
       
-      // Check for Dhan
-      const dhanCredentials = localStorage.getItem('dhanCredentials');
-      if (dhanCredentials) {
-        try {
-          const credentials = JSON.parse(dhanCredentials);
+      // Check for Dhan using BrokerService
+      if (BrokerService.isDhanConnected()) {
+        const credentials = BrokerService.getDhanCredentials();
+        if (credentials) {
           brokers.push({
             id: 1,
             name: 'Dhan',
@@ -122,22 +121,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             latency: '8ms',
             clientId: credentials.clientId
           });
-        } catch (error) {
-          console.error('Error parsing Dhan credentials:', error);
         }
-      }
-      
-      // Check for Zerodha
-      const hasZerodha = localStorage.getItem('zerodhaConnected');
-      if (hasZerodha === 'true') {
-        brokers.push({
-          id: 2,
-          name: 'Zerodha',
-          status: 'connected',
-          logo: '🔵',
-          latency: '12ms',
-          clientId: '****1234'
-        });
       }
       
       setConnectedBrokers(brokers);
@@ -146,7 +130,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
     checkConnectedBrokers();
     
     // Set up interval to periodically check for connected brokers
-    const interval = setInterval(checkConnectedBrokers, 30000);
+    const interval = setInterval(checkConnectedBrokers, 10000); // Check every 10 seconds
     
     return () => clearInterval(interval);
   }, []);
