@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
+import AuthService from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -25,24 +26,6 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Google OAuth configuration
-const GOOGLE_CLIENT_ID = 'your-google-client-id'; // Replace with actual client ID
-
-// Helper function to generate UUID v4
-const generateUUID = (): string => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-};
-
-// Helper function to validate UUID format
-const isValidUUID = (uuid: string): boolean => {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(uuid);
-};
-
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,14 +41,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     // Check for existing session
     const storedUser = localStorage.getItem('traderdesk_user');
-    if (storedUser) {
+    const storedToken = localStorage.getItem('traderdesk_auth_token');
+    
+    if (storedUser && storedToken) {
       try {
         const userData = JSON.parse(storedUser);
         
-        // Validate that the user ID is a proper UUID or starts with 'user_'
-        if (!userData.id || (!isValidUUID(userData.id) && !userData.id.startsWith('user_'))) {
-          console.warn('Invalid user ID format detected, clearing stored user data');
+        // Validate that the user ID exists
+        if (!userData.id) {
+          console.warn('Invalid user data detected, clearing stored user data');
           localStorage.removeItem('traderdesk_user');
+          localStorage.removeItem('traderdesk_auth_token');
           setIsLoading(false);
           return;
         }
@@ -86,10 +72,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else {
           // Session or subscription expired
           localStorage.removeItem('traderdesk_user');
+          localStorage.removeItem('traderdesk_auth_token');
         }
       } catch (error) {
         console.error('Error parsing stored user data:', error);
         localStorage.removeItem('traderdesk_user');
+        localStorage.removeItem('traderdesk_auth_token');
       }
     }
     setIsLoading(false);
@@ -118,28 +106,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Validate phone number format
       const phoneRegex = /^[6-9]\d{9}$/;
       if (!phoneRegex.test(phone)) {
+        console.error('Invalid phone number format:', phone);
         throw new Error('Invalid phone number format');
       }
 
-      // Simulate OTP sending API call
-      console.log(`Sending OTP to +91${phone}`);
+      console.log(`[AuthContext] Sending OTP to +91${phone}`);
       
-      // In a real implementation, you would call your backend API here
-      // const response = await fetch('/api/send-otp', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ phone: `+91${phone}` })
-      // });
-      
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Store phone in localStorage for OTP verification
+      // Use AuthService to send OTP
+      const result = await AuthService.sendOTP(phone);
+
+      if (!result.success) {
+        console.error('[AuthContext] Send OTP failed:', result.message);
+        throw new Error(result.message || 'Failed to send OTP');
+      }
+
+      // Store phone for OTP verification
       localStorage.setItem('traderdesk_otp_phone', phone);
+      
+      console.log('[AuthContext] OTP sent successfully:', result);
+      if (result.demoOTP) {
+        console.log(`[AuthContext] Demo OTP: ${result.demoOTP}`);
+      }
       
       return true;
     } catch (error) {
-      console.error('Failed to send OTP:', error);
+      console.error('[AuthContext] Failed to send OTP:', error);
       return false;
     } finally {
       setIsLoading(false);
@@ -152,22 +143,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Validate OTP format
       if (!/^\d{6}$/.test(otp)) {
+        console.error('[AuthContext] Invalid OTP format:', otp);
         throw new Error('Invalid OTP format');
       }
 
       // Verify phone matches the one OTP was sent to
       const storedPhone = localStorage.getItem('traderdesk_otp_phone');
       if (!storedPhone || storedPhone !== phone) {
+        console.error('[AuthContext] Phone number mismatch. Stored:', storedPhone, 'Provided:', phone);
         throw new Error('Phone number mismatch');
       }
 
-      // Simulate OTP verification
-      // In demo mode, accept 123456 or any 6-digit OTP
-      const isValidOTP = otp === '123456' || /^\d{6}$/.test(otp);
-      
-      if (!isValidOTP) {
-        throw new Error('Invalid OTP');
+      console.log(`[AuthContext] Verifying OTP for +91${phone}`);
+
+      // Use AuthService to verify OTP and login/register
+      const result = await AuthService.verifyOTP(phone, otp, `User ${phone.slice(-4)}`);
+
+      console.log('[AuthContext] Verify OTP response:', result);
+
+      if (!result.success || !result.data) {
+        console.error('[AuthContext] Verify OTP failed:', result.message);
+        throw new Error(result.message || 'Failed to verify OTP');
       }
+
+      // Extract user data from backend response
+      const backendUser = result.data.user;
 
       // Create session expiry (12 hours from now)
       const sessionExpiry = new Date();
@@ -177,16 +177,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const subscriptionExpiry = new Date();
       subscriptionExpiry.setMonth(subscriptionExpiry.getMonth() + 4);
 
-      const userId = `user_${Date.now()}_${phone.slice(-4)}`;
-      
+      // Map backend user data to frontend User type
       const userData: User = {
-        id: userId,
-        name: `User ${phone.slice(-4)}`,
-        email: `user${phone.slice(-4)}@traderdesk.ai`,
-        phone: `+91${phone}`,
-        isActive: true,
+        id: backendUser.id,
+        name: backendUser.name,
+        email: backendUser.email,
+        phone: backendUser.phone,
+        isActive: backendUser.isActive,
         subscriptionExpiry,
-        registrationDate: new Date(),
+        registrationDate: new Date(backendUser.registrationDate),
         loginMethod: 'phone',
         isPaidUser: true,
         deviceId: generateDeviceId(),
@@ -195,14 +194,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       };
 
       setUser(userData);
+      
+      // Store user data (token is already stored by AuthService)
       localStorage.setItem('traderdesk_user', JSON.stringify(userData));
       
       // Clear OTP phone
       localStorage.removeItem('traderdesk_otp_phone');
       
+      console.log('[AuthContext] Login successful:', result);
+      console.log('[AuthContext] User data stored:', userData);
+      
       return true;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('[AuthContext] Login failed:', error);
       return false;
     } finally {
       setIsLoading(false);
@@ -262,6 +266,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('traderdesk_user');
+    localStorage.removeItem('traderdesk_auth_token');
+    localStorage.removeItem('traderdesk_otp_phone');
     
     // Clear any Google Sign-In session
     if (window.google && window.google.accounts) {

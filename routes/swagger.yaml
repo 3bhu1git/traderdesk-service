@@ -1,14 +1,27 @@
 openapi: 3.0.0
 info:
-  title: Dhan Market API
+  title: TraderDesk API
   version: 1.0.0
   description: |
-    API documentation for Dhan Market application.
+    Comprehensive API documentation for TraderDesk trading application.
     
     ## Authentication
-    This API requires authentication with Dhan API credentials.
-    Use the form at the top of this page to enter your Client ID and Access Token.
-    These will be stored in your browser's localStorage and used for all API requests.
+    This API supports multiple authentication methods:
+    
+    ### 1. Phone Number Authentication (Recommended)
+    Use the `/api/auth/*` endpoints to authenticate with phone number and OTP.
+    
+    ### 2. Dhan API Integration  
+    For Dhan-specific endpoints, use the form at the top of this page to enter your 
+    Client ID and Access Token. These will be stored in your browser's localStorage 
+    and used for Dhan API requests.
+    
+    ## Getting Started
+    1. **Register/Login**: Use `/api/auth/send-otp` and `/api/auth/verify-otp`
+    2. **Get JWT Token**: Copy the token from login response
+    3. **Use Token**: Add `Authorization: Bearer <token>` header to protected endpoints
+    4. **Configure Brokers**: Use `/api/brokers` to add your broker accounts
+    5. **Start Trading**: Use market data and order endpoints
 
 servers:
   # Codespaces public URL (used by default in Codespaces)
@@ -24,13 +37,120 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Enter your Dhan access token
+      description: Enter your JWT access token for authentication
     clientIdAuth:
       type: apiKey
       in: header
       name: client-id
       description: Enter your Dhan client ID
   schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: User ID
+        phone:
+          type: string
+          description: User phone number
+        email:
+          type: string
+          description: User email address
+        name:
+          type: string
+          description: User full name
+        isActive:
+          type: boolean
+          description: Whether user account is active
+        loginMethod:
+          type: string
+          enum: [phone, google, email]
+          description: Login method used
+        registrationDate:
+          type: string
+          format: date-time
+          description: User registration date
+        lastLogin:
+          type: string
+          format: date-time
+          description: Last login timestamp
+        brokerAccounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrokerAccount'
+
+    AuthRequest:
+      type: object
+      required:
+        - phone
+      properties:
+        phone:
+          type: string
+          pattern: '^[6-9]\d{9}$'
+          description: 10-digit Indian phone number
+          example: "9876543210"
+
+    OTPVerificationRequest:
+      type: object
+      required:
+        - phone
+        - otp
+      properties:
+        phone:
+          type: string
+          pattern: '^[6-9]\d{9}$'
+          description: 10-digit Indian phone number
+          example: "9876543210"
+        otp:
+          type: string
+          pattern: '^\d{6}$'
+          description: 6-digit OTP code
+          example: "123456"
+        name:
+          type: string
+          description: User name (optional, for new registrations)
+          example: "John Doe"
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Response status
+        message:
+          type: string
+          description: Response message
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            token:
+              type: string
+              description: JWT access token
+            expiresIn:
+              type: string
+              description: Token expiry duration
+              example: "24h"
+
+    BrokerAccount:
+      type: object
+      properties:
+        brokerName:
+          type: string
+          enum: [Dhan, Zerodha, Upstox, AngelOne, Groww]
+        accountId:
+          type: string
+        apiKey:
+          type: string
+        accessToken:
+          type: string
+        isPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
     Order:
       type: object
       required:
@@ -127,6 +247,206 @@ components:
           format: date-time
 
 paths:
+  # Authentication endpoints
+  /api/auth/send-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Send OTP to phone number
+      description: Send a 6-digit OTP to the provided phone number for authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+            example:
+              phone: "9876543210"
+      responses:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "OTP sent successfully"
+                  demoOTP:
+                    type: string
+                    description: "Demo OTP (only in development mode)"
+                    example: "123456"
+        '400':
+          description: Invalid phone number
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Please provide a valid 10-digit Indian phone number"
+        '500':
+          description: Server error
+
+  /api/auth/verify-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Verify OTP and login/register
+      description: Verify the OTP and either login existing user or register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OTPVerificationRequest'
+            example:
+              phone: "9876543210"
+              otp: "123456"
+              name: "John Doe"
+      responses:
+        '200':
+          description: Login/Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid OTP or input validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid OTP"
+        '500':
+          description: Server error
+
+  /api/auth/profile:
+    get:
+      tags:
+        - Authentication
+      summary: Get user profile
+      description: Get the authenticated user's profile information
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+        '500':
+          description: Server error
+    put:
+      tags:
+        - Authentication
+      summary: Update user profile
+      description: Update the authenticated user's profile information
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "John Doe"
+                email:
+                  type: string
+                  example: "john@example.com"
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+        '500':
+          description: Server error
+
+  /api/auth/refresh-token:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh JWT token
+      description: Refresh the JWT access token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Token refreshed successfully"
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        description: New JWT access token
+                      expiresIn:
+                        type: string
+                        example: "24h"
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
   /api/market-data/{symbol}:
     get:
       security:

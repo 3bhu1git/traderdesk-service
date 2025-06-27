@@ -129,6 +129,9 @@ const AuthPage: React.FC = () => {
       setStep('otp');
     } else {
       setError('Failed to send OTP. Please try again.');
+      console.error('[AuthPage] Send OTP failed');
+      // Show browser alert for debugging
+      alert('Failed to send OTP. Check console for details.');
     }
     setIsSubmitting(false);
   };
@@ -159,6 +162,9 @@ const AuthPage: React.FC = () => {
       const success = await login(phone, otp);
       if (!success) {
         setError('Invalid OTP. Please try again.');
+        console.error('[AuthPage] Login failed');
+        // Show browser alert for debugging
+        alert('Login failed. Check console for details.');
       }
     }
     

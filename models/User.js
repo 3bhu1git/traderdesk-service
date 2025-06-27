@@ -44,6 +44,26 @@ const userSchema = new Schema({
     type: String,
     required: true
   },
+  name: {
+    type: String,
+    required: false
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  loginMethod: {
+    type: String,
+    enum: ['phone', 'google', 'email'],
+    default: 'phone'
+  },
+  registrationDate: {
+    type: Date,
+    default: Date.now
+  },
+  lastLogin: {
+    type: Date
+  },
   brokerAccounts: [brokerAccountSchema],
   createdAt: {
     type: Date,
