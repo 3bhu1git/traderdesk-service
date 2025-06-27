@@ -7,25 +7,33 @@ const brokerAccountSchema = new Schema({
     required: true,
     enum: ['Dhan', 'Zerodha', 'Upstox', 'AngelOne', 'Groww']
   },
+  connectionName: {
+    type: String,
+    required: true // User-friendly name for the connection
+  },
   accountId: {
     type: String,
     required: true
   },
-  apiKey: {
+  clientId: {
     type: String,
-    required: true
+    required: true // For API connections
   },
   accessToken: {
     type: String,
     required: true
   },
-  customer: {
-    type: String,
-    required: false
-  },
   isPrimary: {
     type: Boolean,
     default: false
+  },
+  isActive: {
+    type: Boolean,
+    default: true // Whether this connection is currently active
+  },
+  lastConnected: {
+    type: Date,
+    default: null
   },
   createdAt: {
     type: Date,
@@ -64,9 +72,9 @@ const tradingAccountSchema = new Schema({
     enum: ['Trading', 'Demat', 'Combined'],
     default: 'Combined'
   },
-  isActive: {
-    type: Boolean,
-    default: true
+  balance: {
+    type: Number,
+    default: 0 // Account balance for display purposes
   },
   isPrimary: {
     type: Boolean,
@@ -137,6 +145,11 @@ const userSchema = new Schema({
   },
   brokerAccounts: [brokerAccountSchema],
   tradingAccounts: [tradingAccountSchema],
+  // Data integration settings
+  liveDataEnabled: {
+    type: Boolean,
+    default: false // Master switch for live data integration
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -228,6 +241,28 @@ userSchema.methods.removeTradingAccount = function(accountId) {
   }
   
   return this.save();
+};
+
+// Method to set primary broker account
+userSchema.methods.setPrimaryBrokerAccount = function(accountId) {
+  // First, unset all primary flags
+  this.brokerAccounts.forEach(account => {
+    account.isPrimary = false;
+  });
+  
+  // Set the specified account as primary
+  const account = this.brokerAccounts.find(acc => acc._id.toString() === accountId);
+  if (account) {
+    account.isPrimary = true;
+    return this.save();
+  }
+  throw new Error('Broker account not found');
+};
+
+// Method to get active broker account (for live data)
+userSchema.methods.getActiveBrokerAccount = function() {
+  const primary = this.getPrimaryBrokerAccount();
+  return primary && this.liveDataEnabled ? primary : null;
 };
 
 // Static method to create dummy user

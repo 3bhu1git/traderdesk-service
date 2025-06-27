@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Menu, ChevronDown, Link as LinkIcon, MessageSquare, X, Activity, TrendingUp, AlertTriangle, Settings } from 'lucide-react';
+import { Bell, Menu, ChevronDown, Link as LinkIcon, MessageSquare, X, Activity, TrendingUp, AlertTriangle, Settings, Power } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import BrokerService from '../../services/brokerService';
@@ -23,6 +23,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [connectedBrokers, setConnectedBrokers] = useState<any[]>([]);
   const [liveAccountsData, setLiveAccountsData] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
+  const [liveDataEnabled, setLiveDataEnabled] = useState(false);
+  const [primaryDataBroker, setPrimaryDataBroker] = useState<any>(null);
 
   // Mock alerts data
   const alerts = [
@@ -105,7 +107,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const unreadAlertsCount = alerts.filter(alert => !alert.isRead).length;
   const unreadMessagesCount = messages.filter(msg => !msg.isRead).length;
 
-  // Check for connected brokers
+  // Check for connected brokers and live data status
   useEffect(() => {
     const checkConnectedBrokers = async () => {
       const brokers = [];
@@ -130,6 +132,17 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       // Get live accounts data
       const liveData = await BrokerService.getLiveAccountsCount();
       setLiveAccountsData(liveData);
+      
+      // Get live data status
+      try {
+        const liveDataStatus = await BrokerService.getLiveDataStatus();
+        if (liveDataStatus.success && liveDataStatus.data) {
+          setLiveDataEnabled(liveDataStatus.data.enabled);
+          setPrimaryDataBroker(liveDataStatus.data.primaryBroker);
+        }
+      } catch (error) {
+        console.error('Error fetching live data status:', error);
+      }
     };
     
     checkConnectedBrokers();
@@ -139,6 +152,24 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
     
     return () => clearInterval(interval);
   }, []);
+
+  // Handle live data toggle
+  const handleLiveDataToggle = async () => {
+    try {
+      const newState = !liveDataEnabled;
+      const result = await BrokerService.toggleLiveDataIntegration(newState);
+      
+      if (result.success) {
+        setLiveDataEnabled(newState);
+        // Optionally show a success message
+      } else {
+        // Handle error - could show notification
+        console.error('Failed to toggle live data:', result.message);
+      }
+    } catch (error) {
+      console.error('Error toggling live data:', error);
+    }
+  };
 
   // Check market status based on current time
   useEffect(() => {
@@ -242,6 +273,36 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
 
         {/* Right Section */}
         <div className="flex items-center space-x-4">
+          {/* Live Data Toggle - Hidden on mobile */}
+          <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 bg-slate-800/50 border border-slate-600/50 rounded-sm">
+            <span className="text-sm text-slate-300 font-mono">LIVE DATA:</span>
+            <div className="relative" title={`${liveDataEnabled ? 'Disable' : 'Enable'} live data integration`}>
+              <input
+                type="checkbox"
+                id="live-data-toggle"
+                checked={liveDataEnabled}
+                onChange={handleLiveDataToggle}
+                className="sr-only"
+                disabled={!primaryDataBroker}
+              />
+              <label
+                htmlFor="live-data-toggle"
+                className={`relative inline-flex items-center h-5 w-9 rounded-full cursor-pointer transition-all duration-200 ${
+                  liveDataEnabled
+                    ? 'bg-gradient-to-r from-green-600 to-green-500 shadow-lg shadow-green-500/25'
+                    : 'bg-slate-600'
+                } ${!primaryDataBroker ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  className={`inline-block w-3 h-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+                    liveDataEnabled ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </label>
+            </div>
+            <Power className={`w-3 h-3 ${liveDataEnabled ? 'text-green-400' : 'text-slate-400'}`} />
+          </div>
+
           {/* Broker Connections - Hidden on mobile */}
           <div className="relative hidden lg:block" ref={dropdownRef}>
             <button
@@ -264,8 +325,9 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             </button>
 
             {showBrokerDropdown && (
-              <div className="absolute right-0 top-full mt-1 w-72 bg-slate-900/95 backdrop-blur-xl rounded-sm shadow-xl border border-slate-700/50 z-[90]">
-                <div className="p-2 border-b border-slate-700/50">
+              <div className="absolute right-0 top-full mt-1 w-72 bg-slate-900/90 backdrop-blur-2xl rounded-sm shadow-2xl border border-slate-700/50 z-[90]"
+                style={{ backdropFilter: 'blur(32px) saturate(180%)' }}>
+                <div className="p-2 border-b border-slate-700/50 bg-slate-800/20 backdrop-blur-sm">
                   <h3 className="text-xs font-semibold text-slate-200 font-mono">CONNECTED BROKERS</h3>
                 </div>
                 
@@ -323,13 +385,14 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             </button>
 
             {showAlertsDropdown && (
-              <div className="absolute right-0 top-full mt-1 w-80 bg-slate-900/95 backdrop-blur-xl rounded-sm shadow-xl border border-slate-700/50 z-[90]">
-                <div className="p-2 border-b border-slate-700/50">
+              <div className="absolute right-0 top-full mt-1 w-80 bg-slate-900/90 backdrop-blur-2xl rounded-sm shadow-2xl border border-slate-700/50 z-[90]"
+                style={{ backdropFilter: 'blur(32px) saturate(180%)' }}>
+                <div className="p-2 border-b border-slate-700/50 bg-slate-800/20 backdrop-blur-sm">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-semibold text-slate-200 font-mono">SYSTEM ALERTS</h3>
                     <button
                       onClick={() => setShowAlertsDropdown(false)}
-                      className="p-0.5 rounded-sm hover:bg-slate-800"
+                      className="p-0.5 rounded-sm hover:bg-slate-800/50"
                     >
                       <X className="w-3 h-3 text-slate-400" />
                     </button>
@@ -390,13 +453,14 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             </button>
 
             {showMessagesDropdown && (
-              <div className="absolute right-0 top-full mt-1 w-80 bg-slate-900/95 backdrop-blur-xl rounded-sm shadow-xl border border-slate-700/50 z-[90]">
-                <div className="p-2 border-b border-slate-700/50">
+              <div className="absolute right-0 top-full mt-1 w-80 bg-slate-900/90 backdrop-blur-2xl rounded-sm shadow-2xl border border-slate-700/50 z-[90]"
+                style={{ backdropFilter: 'blur(32px) saturate(180%)' }}>
+                <div className="p-2 border-b border-slate-700/50 bg-slate-800/20 backdrop-blur-sm">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-semibold text-slate-200 font-mono">MESSAGES</h3>
                     <button
                       onClick={() => setShowMessagesDropdown(false)}
-                      className="p-0.5 rounded-sm hover:bg-slate-800"
+                      className="p-0.5 rounded-sm hover:bg-slate-800/50"
                     >
                       <X className="w-3 h-3 text-slate-400" />
                     </button>
@@ -466,8 +530,9 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-slate-900/95 backdrop-blur-xl rounded-sm shadow-xl border border-slate-700/50 z-[90]">
-                <div className="p-2 border-b border-slate-700/50">
+              <div className="absolute right-0 top-full mt-1 w-56 bg-slate-900/90 backdrop-blur-2xl rounded-sm shadow-2xl border border-slate-700/50 z-[90]"
+                style={{ backdropFilter: 'blur(32px) saturate(180%)' }}>
+                <div className="p-2 border-b border-slate-700/50 bg-slate-800/20 backdrop-blur-sm">
                   <div className="flex items-center space-x-2">
                     <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-green-500 rounded-sm flex items-center justify-center">
                       <span className="text-xs font-bold text-white font-mono">

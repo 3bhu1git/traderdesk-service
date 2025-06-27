@@ -128,7 +128,7 @@ export const NotificationToast: React.FC<{ notification: Notification; onRemove:
   };
 
   return (
-    <div className={`flex items-start space-x-3 p-4 rounded-sm border ${getStyles()} transform transition-all duration-300 ease-in-out`}>
+    <div className={`flex items-start space-x-3 p-4 rounded-sm border ${getStyles()} transform transition-all duration-300 ease-in-out backdrop-blur-md`}>
       {getIcon()}
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold font-mono">{notification.title}</div>

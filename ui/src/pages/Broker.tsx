@@ -1,13 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Loader, Shield, RefreshCw, Settings, X, Plus, Database, CreditCard, Edit3, Trash2, Star, Search, Power } from 'lucide-react';
-import BrokerService, { BrokerConnection, TradingAccount, TradingAccountData } from '../services/brokerService';
+import { Check, Loader, Shield, RefreshCw, Settings, X, Plus, Database, CreditCard, Edit3, Trash2, Star, Search, Power, ChevronDown } from 'lucide-react';
+import BrokerService, { BrokerConnection, TradingAccount, TradingAccountData, DataBrokerConnection, DataBrokerCredentials } from '../services/brokerService';
 import { useNotifications } from '../context/NotificationContext';
 
 const Broker: React.FC = () => {
   const { showSuccess, showError } = useNotifications();
   const [activeTab, setActiveTab] = useState<'data' | 'trading'>('data');
   
-  // Data Integration State
+  // Data Integration State (New Multi-Broker Support)
+  const [dataBrokerConnections, setDataBrokerConnections] = useState<DataBrokerConnection[]>([]);
+  const [showDataBrokerForm, setShowDataBrokerForm] = useState(false);
+  const [editingDataBroker, setEditingDataBroker] = useState<DataBrokerConnection | null>(null);
+  const [dataBrokerForm, setDataBrokerForm] = useState<DataBrokerCredentials>({
+    brokerName: '',
+    connectionName: '',
+    clientId: '',
+    accessToken: ''
+  });
+  
+  // Legacy Data Integration State (for backward compatibility)
   const [isDhanConnected, setIsDhanConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showDhanForm, setShowDhanForm] = useState(false);
@@ -16,6 +27,16 @@ const Broker: React.FC = () => {
     clientId: '',
     accessToken: ''
   });
+  
+  // Available brokers for dropdown
+  const availableBrokers = [
+    { value: 'Dhan', label: 'Dhan Securities' },
+    { value: 'Zerodha', label: 'Zerodha' },
+    { value: 'AngelOne', label: 'Angel One' },
+    { value: 'Upstox', label: 'Upstox' },
+    { value: 'ICICI', label: 'ICICI Direct' },
+    { value: 'HDFC', label: 'HDFC Securities' }
+  ];
   
   // Trading Accounts State
   const [tradingAccounts, setTradingAccounts] = useState<TradingAccount[]>([]);
@@ -40,8 +61,22 @@ const Broker: React.FC = () => {
   // Check connections on component mount
   useEffect(() => {
     checkConnections();
+    loadDataBrokerConnections();
     loadTradingAccounts();
   }, []);
+
+  const loadDataBrokerConnections = async () => {
+    try {
+      const result = await BrokerService.getDataBrokerConnections();
+      if (result.success && result.data?.connections) {
+        setDataBrokerConnections(result.data.connections);
+      } else {
+        console.error('Failed to load data broker connections:', result.message);
+      }
+    } catch (error) {
+      console.error('Error loading data broker connections:', error);
+    }
+  };
 
   const checkConnections = async () => {
     setIsLoading(true);
@@ -120,25 +155,16 @@ const Broker: React.FC = () => {
     setMasterLiveToggle(newState);
     
     try {
-      // Update all accounts with optimistic UI
-      setTradingAccounts(prev => 
-        prev.map(account => ({ ...account, isLive: newState }))
-      );
-
-      // Update each account in the backend
-      const updatePromises = tradingAccounts.map(account => 
-        BrokerService.updateTradingAccount(account.id, { isLive: newState })
-      );
+      const result = await BrokerService.bulkToggleLiveStatus(newState);
       
-      const results = await Promise.all(updatePromises);
-      const failedUpdates = results.filter(result => !result.success);
-      
-      if (failedUpdates.length > 0) {
-        showError('Update Failed', `Failed to update ${failedUpdates.length} account(s)`);
-        // Reload to get accurate state
+      if (result.success) {
+        showSuccess('Master Toggle Updated', result.message || `All accounts ${newState ? 'enabled for' : 'disabled from'} live trading`);
         await loadTradingAccounts();
       } else {
-        showSuccess('Success', `All accounts ${newState ? 'enabled for' : 'disabled from'} live trading`);
+        showError('Update Failed', result.message || `Failed to update accounts`);
+        // Revert master toggle and reload accounts
+        setMasterLiveToggle(!newState);
+        await loadTradingAccounts();
       }
     } catch (error) {
       showError('Update Failed', 'Failed to update accounts. Please try again.');
@@ -227,12 +253,10 @@ const Broker: React.FC = () => {
         )
       );
 
-      const result = await BrokerService.updateTradingAccount(accountId, { 
-        isLive: !currentLiveStatus 
-      });
+      const result = await BrokerService.toggleAccountLiveStatus(accountId, !currentLiveStatus);
       
       if (result.success) {
-        showSuccess('Status Updated', `Account ${!currentLiveStatus ? 'enabled for' : 'disabled from'} live trading`);
+        showSuccess('Status Updated', result.message || `Account ${!currentLiveStatus ? 'enabled for' : 'disabled from'} live trading`);
         
         // Refresh trading accounts to ensure consistency and update master toggle
         await loadTradingAccounts();
@@ -388,12 +412,159 @@ const Broker: React.FC = () => {
     setTagInput('');
   };
 
+  const resetDataBrokerForm = () => {
+    setDataBrokerForm({
+      brokerName: '',
+      connectionName: '',
+      clientId: '',
+      accessToken: ''
+    });
+  };
+
   const cancelForm = () => {
     setShowTradingForm(false);
     setShowDhanForm(false);
+    setShowDataBrokerForm(false);
+    setEditingDataBroker(null);
     resetForm();
+    resetDataBrokerForm();
   };
 
+  // Data Broker Connection Handlers
+  const handleAddDataBrokerConnection = async () => {
+    if (!dataBrokerForm.brokerName || !dataBrokerForm.connectionName || !dataBrokerForm.clientId || !dataBrokerForm.accessToken) {
+      showError('Validation Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const result = await BrokerService.addDataBrokerConnection(dataBrokerForm);
+      
+      if (result.success) {
+        showSuccess('Connection Added', 'Data broker connection added successfully!');
+        setShowDataBrokerForm(false);
+        resetDataBrokerForm();
+        await loadDataBrokerConnections();
+      } else {
+        showError('Add Failed', result.message || 'Failed to add data broker connection');
+      }
+    } catch (error) {
+      console.error('Add data broker connection error:', error);
+      showError('Add Failed', 'Failed to add data broker connection. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditDataBrokerConnection = (connection: DataBrokerConnection) => {
+    setEditingDataBroker(connection);
+    setDataBrokerForm({
+      brokerName: connection.brokerName,
+      connectionName: connection.connectionName,
+      clientId: connection.clientId,
+      accessToken: '********' // Mask for security
+    });
+    setShowDataBrokerForm(true);
+  };
+
+  const handleUpdateDataBrokerConnection = async () => {
+    if (!editingDataBroker || !dataBrokerForm.brokerName || !dataBrokerForm.connectionName || !dataBrokerForm.clientId) {
+      showError('Validation Error', 'Please fill in all required fields');
+      return;
+    }
+
+    // Note: We'll need to add an update endpoint to the backend
+    showError('Feature Not Yet Available', 'Update functionality will be available soon');
+    // TODO: Implement update functionality
+  };
+
+  const handleDeleteDataBrokerConnection = async (connectionId: string) => {
+    if (!confirm('Are you sure you want to delete this data broker connection?')) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const result = await BrokerService.deleteDataBrokerConnection(connectionId);
+      
+      if (result.success) {
+        showSuccess('Connection Deleted', 'Data broker connection deleted successfully!');
+        await loadDataBrokerConnections();
+      } else {
+        showError('Delete Failed', result.message || 'Failed to delete data broker connection');
+      }
+    } catch (error) {
+      console.error('Delete data broker connection error:', error);
+      showError('Delete Failed', 'Failed to delete data broker connection. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSetPrimaryDataBroker = async (connectionId: string) => {
+    setIsLoading(true);
+
+    try {
+      const result = await BrokerService.setPrimaryDataBroker(connectionId);
+      
+      if (result.success) {
+        showSuccess('Primary Set', 'Primary data broker connection updated successfully!');
+        await loadDataBrokerConnections();
+      } else {
+        showError('Update Failed', result.message || 'Failed to set primary data broker connection');
+      }
+    } catch (error) {
+      console.error('Set primary data broker error:', error);
+      showError('Update Failed', 'Failed to set primary data broker connection. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConnectDataBroker = async (connectionId: string) => {
+    setIsLoading(true);
+
+    try {
+      const result = await BrokerService.connectDataBrokerConnection(connectionId);
+      
+      if (result.success) {
+        showSuccess('Connected', 'Data broker connection is now active for live data!');
+        await loadDataBrokerConnections();
+      } else {
+        showError('Connection Failed', result.message || 'Failed to activate connection');
+      }
+    } catch (error) {
+      console.error('Connect data broker error:', error);
+      showError('Connection Failed', 'Failed to connect data broker. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDisconnectDataBroker = async (connectionId: string) => {
+    setIsLoading(true);
+
+    try {
+      const result = await BrokerService.disconnectDataBrokerConnection(connectionId);
+      
+      if (result.success) {
+        showSuccess('Disconnected', 'Data broker connection has been deactivated');
+        await loadDataBrokerConnections();
+      } else {
+        showError('Disconnect Failed', result.message || 'Failed to deactivate connection');
+      }
+    } catch (error) {
+      console.error('Disconnect data broker error:', error);
+      showError('Disconnect Failed', 'Failed to disconnect. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Tag management functions for trading accounts
   const addTag = (tag: string) => {
     if (tag && !tradingAccountForm.tags?.includes(tag)) {
       setTradingAccountForm(prev => ({
@@ -472,68 +643,139 @@ const Broker: React.FC = () => {
                   <h2 className="text-xl font-semibold text-slate-200">Data Integration</h2>
                   <p className="text-sm text-slate-400">Connect brokers for real-time market data and analytics</p>
                 </div>
-                <button
-                  onClick={checkConnections}
-                  disabled={isLoading}
-                  className="p-2 hover:bg-slate-700 rounded-sm transition-colors"
-                  title="Refresh connection status"
-                >
-                  <RefreshCw className={`w-5 h-5 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} />
-                </button>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={loadDataBrokerConnections}
+                    disabled={isLoading}
+                    className="p-2 hover:bg-slate-700 rounded-sm transition-colors"
+                    title="Refresh connections"
+                  >
+                    <RefreshCw className={`w-5 h-5 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    onClick={() => setShowDataBrokerForm(true)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-sm font-semibold hover:from-green-700 hover:to-green-600 transition-all duration-200"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Connection</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Dhan Integration */}
+              {/* Data Broker Connections List */}
               <div className="space-y-4">
-                <div className={`border rounded-sm p-4 ${isDhanConnected ? 'border-green-700/50 bg-green-900/20' : 'border-slate-700/50 bg-slate-800/30'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-500 rounded-sm flex items-center justify-center">
-                        <span className="text-white font-bold text-xs">DHAN</span>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-200">Dhan Securities</h3>
-                        <p className="text-sm text-slate-400">Real-time data, charts & analytics</p>
-                        {isDhanConnected && dhanCredentials.clientId && (
-                          <p className="text-sm text-green-400">Client ID: {dhanCredentials.clientId}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <div className={`flex items-center space-x-2 px-3 py-2 rounded-sm text-sm ${
-                        isDhanConnected 
-                          ? 'bg-green-900/30 border border-green-700/50 text-green-300' 
-                          : 'bg-slate-700/30 border border-slate-600/50 text-slate-400'
+                {dataBrokerConnections.length > 0 ? (
+                  dataBrokerConnections.map((connection) => {
+                    return (
+                      <div key={connection.id} className={`border rounded-sm p-4 ${
+                        connection.isActive 
+                          ? 'border-green-700/50 bg-green-900/20' 
+                          : 'border-slate-700/50 bg-slate-800/30'
                       }`}>
-                        <div className={`w-2 h-2 rounded-full ${isDhanConnected ? 'bg-green-400' : 'bg-slate-500'}`}></div>
-                        <span>{isDhanConnected ? 'Connected' : 'Disconnected'}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-500 rounded-sm flex items-center justify-center">
+                              <span className="text-white font-bold text-xs">{connection.brokerName.slice(0, 4).toUpperCase()}</span>
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <h3 className="font-semibold text-slate-200">{connection.connectionName}</h3>
+                                {connection.isPrimary && (
+                                  <div title="Primary connection">
+                                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                                  </div>
+                                )}
+                                {connection.isActive && (
+                                  <span className="text-xs bg-green-900/30 border border-green-700/50 text-green-300 px-2 py-1 rounded-sm font-mono">
+                                    CONNECTED
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-slate-400">{connection.brokerName} • Client ID: {connection.clientId}</p>
+                              {connection.lastConnected && (
+                                <p className="text-xs text-slate-500">Last connected: {new Date(connection.lastConnected).toLocaleString()}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            {/* Set Primary Star Button */}
+                            {!connection.isPrimary && (
+                              <button
+                                onClick={() => handleSetPrimaryDataBroker(connection.id)}
+                                disabled={isLoading}
+                                className="p-2 hover:bg-yellow-900/50 rounded-sm transition-colors"
+                                title="Set as primary"
+                              >
+                                <Star className="w-4 h-4 text-slate-400 hover:text-yellow-400" />
+                              </button>
+                            )}
+                            
+                            {/* Connection Control Button */}
+                            {connection.isActive ? (
+                              <button
+                                onClick={() => handleDisconnectDataBroker(connection.id)}
+                                disabled={isLoading}
+                                className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-sm transition-colors disabled:opacity-50 text-sm"
+                                title="Disconnect from live data"
+                              >
+                                Disconnect
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleConnectDataBroker(connection.id)}
+                                disabled={isLoading}
+                                className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-sm transition-colors disabled:opacity-50 text-sm"
+                                title="Connect for live data"
+                              >
+                                Connect
+                              </button>
+                            )}
+                            
+                            <button
+                              onClick={() => handleEditDataBrokerConnection(connection)}
+                              disabled={isLoading}
+                              className="p-2 hover:bg-slate-700 rounded-sm transition-colors"
+                              title="Edit connection"
+                            >
+                              <Edit3 className="w-4 h-4 text-slate-400" />
+                            </button>
+                            
+                            <button
+                              onClick={() => handleDeleteDataBrokerConnection(connection.id)}
+                              disabled={isLoading}
+                              className="p-2 hover:bg-red-900/50 rounded-sm transition-colors"
+                              title="Delete connection"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-400" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      {isDhanConnected ? (
-                        <button
-                          onClick={handleDhanDisconnect}
-                          disabled={isLoading}
-                          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-sm transition-colors disabled:opacity-50"
-                        >
-                          Disconnect
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setShowDhanForm(true)}
-                          className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-sm font-semibold hover:from-green-700 hover:to-green-600 transition-all duration-200"
-                        >
-                          Connect
-                        </button>
-                      )}
-                    </div>
+                    );
+                  })
+                ) : (
+                  <div className="border border-slate-700/50 rounded-sm p-8 text-center bg-slate-800/30">
+                    <Database className="w-12 h-12 text-slate-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-slate-300 mb-2">No Data Broker Connections</h3>
+                    <p className="text-sm text-slate-400 mb-4">Add a broker connection to start receiving real-time market data</p>
+                    <button
+                      onClick={() => setShowDataBrokerForm(true)}
+                      className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-sm font-semibold hover:from-green-700 hover:to-green-600 transition-all duration-200"
+                    >
+                      Add Your First Connection
+                    </button>
                   </div>
-                </div>
+                )}
 
-                {/* Dhan Connection Form */}
-                {showDhanForm && (
+                {/* Add/Edit Data Broker Form */}
+                {showDataBrokerForm && (
                   <div className="border border-slate-700/50 rounded-sm p-6 bg-slate-800/30">
                     <div className="flex items-center justify-between mb-6">
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-200">Connect to Dhan</h3>
-                        <p className="text-sm text-slate-400">Enter your Dhan API credentials to enable data integration</p>
+                        <h3 className="text-lg font-semibold text-slate-200">
+                          {editingDataBroker ? 'Edit Data Broker Connection' : 'Add Data Broker Connection'}
+                        </h3>
+                        <p className="text-sm text-slate-400">Configure your broker API credentials for data integration</p>
                       </div>
                       <button
                         onClick={cancelForm}
@@ -543,16 +785,35 @@ const Broker: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-slate-300 mb-2">
-                          Customer Name (Optional)
+                          Data Broker <span className="text-red-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={dataBrokerForm.brokerName}
+                            onChange={(e) => setDataBrokerForm({...dataBrokerForm, brokerName: e.target.value})}
+                            className="w-full px-4 py-3 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 appearance-none"
+                          >
+                            <option value="">Select a broker</option>
+                            {availableBrokers.map((broker) => (
+                              <option key={broker.value} value={broker.value}>{broker.label}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                          Connection Name <span className="text-red-400">*</span>
                         </label>
                         <input
                           type="text"
-                          value={dhanCredentials.customer}
-                          onChange={(e) => setDhanCredentials({...dhanCredentials, customer: e.target.value})}
-                          placeholder="Your name or identifier"
+                          value={dataBrokerForm.connectionName}
+                          onChange={(e) => setDataBrokerForm({...dataBrokerForm, connectionName: e.target.value})}
+                          placeholder="e.g., Main Trading Account, Backup Connection"
                           className="w-full px-4 py-3 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 placeholder-slate-500"
                         />
                       </div>
@@ -563,9 +824,9 @@ const Broker: React.FC = () => {
                         </label>
                         <input
                           type="text"
-                          value={dhanCredentials.clientId}
-                          onChange={(e) => setDhanCredentials({...dhanCredentials, clientId: e.target.value})}
-                          placeholder="Enter your Dhan Client ID"
+                          value={dataBrokerForm.clientId}
+                          onChange={(e) => setDataBrokerForm({...dataBrokerForm, clientId: e.target.value})}
+                          placeholder="Enter your Client ID"
                           className="w-full px-4 py-3 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 placeholder-slate-500"
                         />
                       </div>
@@ -576,35 +837,35 @@ const Broker: React.FC = () => {
                         </label>
                         <input
                           type="password"
-                          value={dhanCredentials.accessToken}
-                          onChange={(e) => setDhanCredentials({...dhanCredentials, accessToken: e.target.value})}
-                          placeholder="Enter your Dhan Access Token"
+                          value={dataBrokerForm.accessToken}
+                          onChange={(e) => setDataBrokerForm({...dataBrokerForm, accessToken: e.target.value})}
+                          placeholder="Enter your Access Token"
                           className="w-full px-4 py-3 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 placeholder-slate-500"
                         />
                       </div>
+                    </div>
 
-                      <div className="flex space-x-3 pt-4">
-                        <button
-                          onClick={handleDhanConnect}
-                          disabled={isLoading || !dhanCredentials.clientId || !dhanCredentials.accessToken}
-                          className="flex-1 bg-gradient-to-r from-green-600 to-green-500 text-white py-3 rounded-sm font-semibold hover:from-green-700 hover:to-green-600 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isLoading ? (
-                            <Loader className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Check className="w-4 h-4" />
-                              <span>Connect to Dhan</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={cancelForm}
-                          className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-sm transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                    <div className="flex space-x-3 pt-6">
+                      <button
+                        onClick={editingDataBroker ? handleUpdateDataBrokerConnection : handleAddDataBrokerConnection}
+                        disabled={isLoading || !dataBrokerForm.brokerName || !dataBrokerForm.connectionName || !dataBrokerForm.clientId || !dataBrokerForm.accessToken}
+                        className="flex-1 bg-gradient-to-r from-green-600 to-green-500 text-white py-3 rounded-sm font-semibold hover:from-green-700 hover:to-green-600 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isLoading ? (
+                          <Loader className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>{editingDataBroker ? 'Update Connection' : 'Add Connection'}</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={cancelForm}
+                        className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-sm transition-colors"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 )}
@@ -653,7 +914,12 @@ const Broker: React.FC = () => {
                   
                   <button
                     onClick={() => setShowTradingForm(true)}
-                    className="flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-sm font-semibold hover:from-blue-700 hover:to-blue-600 transition-all duration-200 shadow-lg hover:shadow-blue-500/25 text-sm md:text-base"
+                    disabled={editingAccount !== null}
+                    className={`flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 rounded-sm font-semibold transition-all duration-200 shadow-lg text-sm md:text-base ${
+                      editingAccount !== null
+                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:shadow-blue-500/25'
+                    }`}
                   >
                     <Plus className="w-3 h-3 md:w-4 md:h-4" />
                     <span className="hidden sm:inline">Add Account</span>
@@ -721,7 +987,22 @@ const Broker: React.FC = () => {
                           </div>
                         </div>
                         
-                        <div className="flex items-center justify-between sm:justify-end space-x-2">
+                        <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-4">
+                          {/* Primary Indicator and Balance Display */}
+                          <div className="flex items-center space-x-2">
+                            {account.isPrimary && (
+                              <div className="flex items-center" title="Primary account">
+                                <Star className="w-3 h-3 md:w-4 md:h-4 text-yellow-400 fill-current" />
+                              </div>
+                            )}
+                            <div className="text-right">
+                              <div className="text-xs text-slate-500">Balance</div>
+                              <div className="text-sm md:text-base font-semibold text-green-400">
+                                ₹{account.balance ? account.balance.toLocaleString('en-IN') : '0'}
+                              </div>
+                            </div>
+                          </div>
+                          
                           <div className="flex items-center space-x-1 sm:space-x-2">
                             {!account.isPrimary && (
                               <button

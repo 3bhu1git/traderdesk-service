@@ -525,6 +525,589 @@ const setPrimaryTradingAccount = async (req, res) => {
   }
 };
 
+/**
+ * Toggle live trading status for a specific trading account
+ */
+const toggleAccountLiveStatus = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { accountId } = req.params;
+    const { isLive } = req.body;
+
+    if (!accountId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account ID is required'
+      });
+    }
+
+    if (typeof isLive !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'isLive must be a boolean value'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const account = user.tradingAccounts.find(acc => acc._id.toString() === accountId);
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trading account not found'
+      });
+    }
+
+    // Update the live status
+    account.isLive = isLive;
+    account.updatedAt = new Date();
+    
+    await user.save();
+
+    const statusText = isLive ? 'enabled for live trading' : 'disabled from live trading';
+    
+    logger.info(`Trading account ${account.accountName} ${statusText} for user: ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: `Account ${statusText} successfully`,
+      data: {
+        accountId: account._id,
+        accountName: account.accountName,
+        isLive: account.isLive
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error toggling account live status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update account live status'
+    });
+  }
+};
+
+/**
+ * Bulk update live trading status for all trading accounts
+ */
+const bulkToggleLiveStatus = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { isLive } = req.body;
+
+    if (typeof isLive !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'isLive must be a boolean value'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (!user.tradingAccounts || user.tradingAccounts.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No trading accounts found'
+      });
+    }
+
+    // Update all accounts
+    let updatedCount = 0;
+    user.tradingAccounts.forEach(account => {
+      if (account.isLive !== isLive) {
+        account.isLive = isLive;
+        account.updatedAt = new Date();
+        updatedCount++;
+      }
+    });
+
+    await user.save();
+
+    const statusText = isLive ? 'enabled for live trading' : 'disabled from live trading';
+    
+    logger.info(`${updatedCount} trading accounts ${statusText} for user: ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: `All accounts ${statusText} successfully`,
+      data: {
+        totalAccounts: user.tradingAccounts.length,
+        updatedAccounts: updatedCount,
+        liveAccountsCount: user.tradingAccounts.filter(acc => acc.isLive).length
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error bulk toggling live status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update accounts live status'
+    });
+  }
+};
+
+/**
+ * Add a new data broker connection
+ */
+const addDataBrokerConnection = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { brokerName, connectionName, clientId, accessToken } = req.body;
+
+    if (!brokerName || !connectionName || !clientId || !accessToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required: brokerName, connectionName, clientId, accessToken'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Test connection first (example for Dhan)
+    if (brokerName === 'Dhan') {
+      try {
+        const dhanResponse = await axios.get('https://api.dhan.co/v2/fundlimit', {
+          headers: {
+            'access-token': accessToken,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
+
+        if (dhanResponse.status !== 200) {
+          return res.status(400).json({
+            success: false,
+            message: 'Failed to connect to Dhan. Please check your credentials.'
+          });
+        }
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Dhan credentials or API connection failed'
+        });
+      }
+    }
+
+    // Check if this is the first broker account
+    const isFirstAccount = user.brokerAccounts.length === 0;
+
+    // Create new broker account
+    const newBrokerAccount = {
+      brokerName,
+      connectionName,
+      accountId: clientId, // Using clientId as accountId for data connections
+      clientId,
+      accessToken,
+      isPrimary: isFirstAccount, // First account becomes primary automatically
+      isActive: true,
+      lastConnected: new Date()
+    };
+
+    user.brokerAccounts.push(newBrokerAccount);
+    await user.save();
+
+    logger.info(`Data broker connection added for user: ${userId}, broker: ${brokerName}`);
+
+    res.status(201).json({
+      success: true,
+      message: `${brokerName} data connection added successfully`,
+      data: {
+        connectionId: newBrokerAccount._id,
+        brokerName,
+        connectionName,
+        isPrimary: newBrokerAccount.isPrimary
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error adding data broker connection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add data broker connection'
+    });
+  }
+};
+
+/**
+ * Get all data broker connections
+ */
+const getDataBrokerConnections = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const connections = user.brokerAccounts.map(account => ({
+      id: account._id,
+      brokerName: account.brokerName,
+      connectionName: account.connectionName,
+      accountId: account.accountId,
+      clientId: account.clientId,
+      isPrimary: account.isPrimary,
+      isActive: account.isActive,
+      lastConnected: account.lastConnected,
+      createdAt: account.createdAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        connections: connections
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error fetching data broker connections:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch data broker connections'
+    });
+  }
+};
+
+/**
+ * Set primary data broker connection
+ */
+const setPrimaryDataBroker = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { connectionId } = req.body;
+
+    if (!connectionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Connection ID is required'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    await user.setPrimaryBrokerAccount(connectionId);
+
+    logger.info(`Primary data broker set for user: ${userId}, connectionId: ${connectionId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Primary data broker connection updated successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error setting primary data broker:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to set primary data broker'
+    });
+  }
+};
+
+/**
+ * Toggle live data integration
+ */
+const toggleLiveDataIntegration = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'enabled must be a boolean value'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user has a primary broker account when enabling
+    if (enabled && !user.getPrimaryAccount()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please set a primary data broker connection first'
+      });
+    }
+
+    user.liveDataEnabled = enabled;
+    await user.save();
+
+    logger.info(`Live data integration ${enabled ? 'enabled' : 'disabled'} for user: ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: `Live data integration ${enabled ? 'enabled' : 'disabled'} successfully`,
+      data: {
+        liveDataEnabled: user.liveDataEnabled,
+        primaryBroker: user.getPrimaryAccount()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error toggling live data integration:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle live data integration'
+    });
+  }
+};
+
+/**
+ * Get live data integration status
+ */
+const getLiveDataStatus = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const primaryBroker = user.getPrimaryAccount();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        enabled: user.liveDataEnabled || false,
+        primaryBroker: primaryBroker
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error getting live data status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get live data status'
+    });
+  }
+};
+
+/**
+ * Delete data broker connection
+ */
+const deleteDataBrokerConnection = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { connectionId } = req.params;
+
+    if (!connectionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Connection ID is required'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const connectionIndex = user.brokerAccounts.findIndex(acc => acc._id.toString() === connectionId);
+    if (connectionIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Data broker connection not found'
+      });
+    }
+
+    const wasLiveDataEnabled = user.liveDataEnabled;
+    const wasPrimary = user.brokerAccounts[connectionIndex].isPrimary;
+
+    // Remove the connection
+    user.brokerAccounts.splice(connectionIndex, 1);
+
+    // If this was the primary connection and there are other connections, set a new primary
+    if (wasPrimary && user.brokerAccounts.length > 0) {
+      user.brokerAccounts[0].isPrimary = true;
+    }
+
+    // If this was the primary connection and live data was enabled, disable it
+    if (wasPrimary && wasLiveDataEnabled) {
+      user.liveDataEnabled = false;
+    }
+
+    await user.save();
+
+    logger.info(`Data broker connection deleted for user: ${userId}, connectionId: ${connectionId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Data broker connection deleted successfully',
+      data: {
+        liveDataEnabled: user.liveDataEnabled
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error deleting data broker connection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete data broker connection'
+    });
+  }
+};
+
+/**
+ * Connect a specific data broker connection (set as active)
+ */
+const connectDataBrokerConnection = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { connectionId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Find the connection to activate
+    const connectionToActivate = user.brokerAccounts.id(connectionId);
+    if (!connectionToActivate) {
+      return res.status(404).json({
+        success: false,
+        message: 'Connection not found'
+      });
+    }
+
+    // Deactivate all other connections
+    user.brokerAccounts.forEach(account => {
+      account.isActive = false;
+    });
+
+    // Activate the selected connection
+    connectionToActivate.isActive = true;
+    connectionToActivate.lastConnected = new Date();
+
+    // Set as primary if no primary is set
+    if (!user.brokerAccounts.some(acc => acc.isPrimary)) {
+      connectionToActivate.isPrimary = true;
+    }
+
+    // Enable live data integration
+    user.liveDataEnabled = true;
+
+    await user.save();
+
+    logger.info(`Data broker connection activated: ${connectionId} for user: ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Data broker connection activated successfully',
+      data: {
+        connectionId,
+        isActive: true,
+        liveDataEnabled: user.liveDataEnabled
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error connecting data broker connection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to connect data broker connection'
+    });
+  }
+};
+
+/**
+ * Disconnect a specific data broker connection (set as inactive)
+ */
+const disconnectDataBrokerConnection = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { connectionId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Find the connection to deactivate
+    const connectionToDeactivate = user.brokerAccounts.id(connectionId);
+    if (!connectionToDeactivate) {
+      return res.status(404).json({
+        success: false,
+        message: 'Connection not found'
+      });
+    }
+
+    // Deactivate the connection
+    connectionToDeactivate.isActive = false;
+
+    // If this was the only active connection, disable live data
+    const hasActiveConnections = user.brokerAccounts.some(acc => acc.isActive);
+    if (!hasActiveConnections) {
+      user.liveDataEnabled = false;
+    }
+
+    await user.save();
+
+    logger.info(`Data broker connection deactivated: ${connectionId} for user: ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Data broker connection deactivated successfully',
+      data: {
+        connectionId,
+        isActive: false,
+        liveDataEnabled: user.liveDataEnabled
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error disconnecting data broker connection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to disconnect data broker connection'
+    });
+  }
+};
+
 module.exports = {
   connectDhan,
   disconnectDhan,
@@ -534,5 +1117,17 @@ module.exports = {
   getTradingAccounts,
   updateTradingAccount,
   deleteTradingAccount,
-  setPrimaryTradingAccount
+  setPrimaryTradingAccount,
+  toggleAccountLiveStatus,
+  bulkToggleLiveStatus,
+  addDataBrokerConnection,
+  getDataBrokerConnections,
+  setPrimaryDataBroker,
+  toggleLiveDataIntegration,
+  getLiveDataStatus,
+  deleteDataBrokerConnection,
+  connectDataBrokerConnection,
+  disconnectDataBrokerConnection,
+  connectDataBrokerConnection,
+  disconnectDataBrokerConnection
 };
