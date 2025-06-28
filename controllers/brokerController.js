@@ -717,8 +717,8 @@ const addDataBrokerConnection = async (req, res) => {
       clientId,
       accessToken,
       isPrimary: isFirstAccount, // First account becomes primary automatically
-      isActive: true,
-      lastConnected: new Date()
+      isActive: isFirstAccount, // Only first account is active by default, others are inactive
+      lastConnected: isFirstAccount ? new Date() : null
     };
 
     user.brokerAccounts.push(newBrokerAccount);
@@ -812,13 +812,40 @@ const setPrimaryDataBroker = async (req, res) => {
       });
     }
 
-    await user.setPrimaryBrokerAccount(connectionId);
+    // Find the connection to be set as primary
+    const targetConnection = user.brokerAccounts.find(acc => acc._id.toString() === connectionId);
+    if (!targetConnection) {
+      return res.status(404).json({
+        success: false,
+        message: 'Connection not found'
+      });
+    }
 
-    logger.info(`Primary data broker set for user: ${userId}, connectionId: ${connectionId}`);
+    // First, deactivate all connections and unset primary flags
+    user.brokerAccounts.forEach(account => {
+      account.isPrimary = false;
+      account.isActive = false;
+    });
+
+    // Set the target connection as primary and active
+    targetConnection.isPrimary = true;
+    targetConnection.isActive = true;
+    targetConnection.lastConnected = new Date();
+
+    await user.save();
+
+    logger.info(`Primary data broker set and activated for user: ${userId}, connectionId: ${connectionId}`);
 
     res.status(200).json({
       success: true,
-      message: 'Primary data broker connection updated successfully'
+      message: 'Primary data broker connection updated and activated successfully',
+      data: {
+        connectionId: targetConnection._id,
+        brokerName: targetConnection.brokerName,
+        connectionName: targetConnection.connectionName,
+        isPrimary: true,
+        isActive: true
+      }
     });
 
   } catch (error) {
@@ -853,25 +880,52 @@ const toggleLiveDataIntegration = async (req, res) => {
       });
     }
 
-    // Check if user has a primary broker account when enabling
-    if (enabled && !user.getPrimaryAccount()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please set a primary data broker connection first'
+    if (enabled) {
+      // When enabling live data:
+      // 1. Check if user has a primary broker account
+      const primaryAccount = user.getPrimaryAccount();
+      if (!primaryAccount) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please set a primary data broker connection first'
+        });
+      }
+
+      // 2. Check if any connection is already active
+      const hasActiveConnection = user.brokerAccounts.some(account => account.isActive);
+      
+      if (!hasActiveConnection) {
+        // 3. Activate the primary connection if none is active
+        primaryAccount.isActive = true;
+        primaryAccount.lastConnected = new Date();
+      }
+
+      user.liveDataEnabled = true;
+    } else {
+      // When disabling live data:
+      // 1. Disconnect all data broker connections
+      user.brokerAccounts.forEach(account => {
+        account.isActive = false;
       });
+
+      user.liveDataEnabled = false;
     }
 
-    user.liveDataEnabled = enabled;
     await user.save();
 
     logger.info(`Live data integration ${enabled ? 'enabled' : 'disabled'} for user: ${userId}`);
+
+    // Get updated primary account and active connections count
+    const activeConnectionsCount = user.brokerAccounts.filter(account => account.isActive).length;
 
     res.status(200).json({
       success: true,
       message: `Live data integration ${enabled ? 'enabled' : 'disabled'} successfully`,
       data: {
         liveDataEnabled: user.liveDataEnabled,
-        primaryBroker: user.getPrimaryAccount()
+        primaryBroker: user.getPrimaryAccount(),
+        activeConnectionsCount,
+        hasActiveConnections: activeConnectionsCount > 0
       }
     });
 
@@ -900,12 +954,17 @@ const getLiveDataStatus = async (req, res) => {
     }
 
     const primaryBroker = user.getPrimaryAccount();
+    const activeConnectionsCount = user.brokerAccounts.filter(account => account.isActive).length;
+    const hasActiveConnections = activeConnectionsCount > 0;
 
     res.status(200).json({
       success: true,
       data: {
-        enabled: user.liveDataEnabled || false,
-        primaryBroker: primaryBroker
+        enabled: hasActiveConnections, // Status based on active connections, not just the flag
+        liveDataEnabled: user.liveDataEnabled || false, // The user's preference setting
+        primaryBroker: primaryBroker,
+        activeConnectionsCount,
+        hasActiveConnections
       }
     });
 

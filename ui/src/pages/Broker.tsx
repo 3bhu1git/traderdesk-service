@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Loader, Shield, RefreshCw, Settings, X, Plus, Database, CreditCard, Edit3, Trash2, Star, Search, Power, ChevronDown } from 'lucide-react';
+import { Check, Loader, Shield, RefreshCw, Settings, X, Plus, Database, CreditCard, Edit3, Trash2, Search, Power, ChevronDown, Pin } from 'lucide-react';
 import BrokerService, { BrokerConnection, TradingAccount, TradingAccountData, DataBrokerConnection, DataBrokerCredentials } from '../services/brokerService';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -133,14 +133,23 @@ const Broker: React.FC = () => {
   // Load trading accounts and update master toggle state
   const loadTradingAccounts = async () => {
     try {
+      console.log('[Broker] Loading trading accounts...');
       const result = await BrokerService.getTradingAccounts();
       if (result.success) {
         const accounts = result.data?.accounts || [];
+        console.log(`[Broker] Loaded ${accounts.length} accounts:`, accounts.map((acc: TradingAccount) => ({ id: acc.id, name: acc.accountName, isLive: acc.isLive })));
         setTradingAccounts(accounts);
         
-        // Update master toggle based on accounts - true if ANY account is live
-        const anyLive = accounts.length > 0 && accounts.some((account: TradingAccount) => account.isLive);
-        setMasterLiveToggle(anyLive);
+        // Update master toggle based on accounts - true if ALL accounts are live (or no accounts)
+        if (accounts.length === 0) {
+          console.log('[Broker] No accounts found, setting master toggle to false');
+          setMasterLiveToggle(false);
+        } else {
+          const allLive = accounts.every((account: TradingAccount) => account.isLive);
+          const liveCount = accounts.filter((account: TradingAccount) => account.isLive).length;
+          console.log(`[Broker] ${liveCount}/${accounts.length} accounts are live, all live: ${allLive}`);
+          setMasterLiveToggle(allLive);
+        }
       } else {
         console.error('Failed to load trading accounts:', result.message);
       }
@@ -152,24 +161,44 @@ const Broker: React.FC = () => {
   // Master toggle handler
   const handleMasterLiveToggle = async () => {
     const newState = !masterLiveToggle;
-    setMasterLiveToggle(newState);
     
+    console.log(`[Broker] Master toggle clicked: current=${masterLiveToggle}, new=${newState}`);
+    console.log(`[Broker] Current accounts:`, tradingAccounts.map(acc => ({ id: acc.id, name: acc.accountName, isLive: acc.isLive })));
+    
+    // Don't update local state optimistically for master toggle to avoid confusion
     try {
+      console.log(`[Broker] Calling BrokerService.bulkToggleLiveStatus(${newState})`);
       const result = await BrokerService.bulkToggleLiveStatus(newState);
+      console.log('[Broker] Bulk toggle API response:', result);
       
       if (result.success) {
+        console.log('[Broker] Bulk toggle successful, updating UI');
         showSuccess('Master Toggle Updated', result.message || `All accounts ${newState ? 'enabled for' : 'disabled from'} live trading`);
-        await loadTradingAccounts();
+        
+        // Immediately update the accounts to reflect the new state
+        const updatedAccounts = tradingAccounts.map(account => ({
+          ...account,
+          isLive: newState
+        }));
+        console.log('[Broker] Setting updated accounts:', updatedAccounts.map(acc => ({ id: acc.id, name: acc.accountName, isLive: acc.isLive })));
+        setTradingAccounts(updatedAccounts);
+        setMasterLiveToggle(newState);
+        
+        // Also reload from server to ensure consistency
+        setTimeout(() => {
+          console.log('[Broker] Reloading accounts from server after 100ms...');
+          loadTradingAccounts();
+        }, 100);
       } else {
+        console.error('[Broker] Bulk toggle failed:', result);
         showError('Update Failed', result.message || `Failed to update accounts`);
-        // Revert master toggle and reload accounts
-        setMasterLiveToggle(!newState);
+        // Reload accounts to ensure correct state
         await loadTradingAccounts();
       }
     } catch (error) {
+      console.error('[Broker] Bulk toggle error:', error);
       showError('Update Failed', 'Failed to update accounts. Please try again.');
-      // Revert master toggle and reload accounts
-      setMasterLiveToggle(!newState);
+      // Reload accounts to ensure correct state
       await loadTradingAccounts();
     }
   };
@@ -244,23 +273,35 @@ const Broker: React.FC = () => {
 
   const handleToggleLiveTrading = async (accountId: string, currentLiveStatus: boolean) => {
     try {
+      console.log(`[Broker] Individual toggle: account ${accountId} from ${currentLiveStatus} to ${!currentLiveStatus}`);
+      
       // Optimistically update the UI
-      setTradingAccounts(prev => 
-        prev.map(account => 
-          account.id === accountId 
-            ? { ...account, isLive: !currentLiveStatus }
-            : account
-        )
+      const updatedAccounts = tradingAccounts.map(account => 
+        account.id === accountId 
+          ? { ...account, isLive: !currentLiveStatus }
+          : account
       );
+      setTradingAccounts(updatedAccounts);
+      
+      // Update master toggle based on the optimistic update
+      if (updatedAccounts.length > 0) {
+        const allLive = updatedAccounts.every(account => account.isLive);
+        console.log(`[Broker] Setting master toggle to ${allLive} (all accounts live: ${allLive})`);
+        setMasterLiveToggle(allLive);
+      }
 
       const result = await BrokerService.toggleAccountLiveStatus(accountId, !currentLiveStatus);
       
       if (result.success) {
+        console.log('[Broker] Individual toggle successful:', result);
         showSuccess('Status Updated', result.message || `Account ${!currentLiveStatus ? 'enabled for' : 'disabled from'} live trading`);
         
         // Refresh trading accounts to ensure consistency and update master toggle
-        await loadTradingAccounts();
+        setTimeout(() => {
+          loadTradingAccounts();
+        }, 100);
       } else {
+        console.error('[Broker] Individual toggle failed:', result);
         // Revert optimistic update on failure
         setTradingAccounts(prev => 
           prev.map(account => 
@@ -269,9 +310,12 @@ const Broker: React.FC = () => {
               : account
           )
         );
+        // Revert master toggle
+        await loadTradingAccounts();
         showError('Update Failed', result.message || 'Failed to update live trading status');
       }
     } catch (error) {
+      console.error('[Broker] Individual toggle error:', error);
       // Revert optimistic update on error
       setTradingAccounts(prev => 
         prev.map(account => 
@@ -280,7 +324,8 @@ const Broker: React.FC = () => {
             : account
         )
       );
-      console.error('Toggle live trading error:', error);
+      // Revert master toggle
+      await loadTradingAccounts();
       showError('Update Failed', 'Failed to update live trading status. Please try again.');
     }
   };
@@ -359,26 +404,6 @@ const Broker: React.FC = () => {
     } catch (error) {
       console.error('Delete trading account error:', error);
       showError('Delete Failed', 'Failed to delete trading account. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSetPrimaryTradingAccount = async (accountId: string) => {
-    setIsLoading(true);
-
-    try {
-      const result = await BrokerService.setPrimaryTradingAccount(accountId);
-      
-      if (result.success) {
-        showSuccess('Primary Account Set', 'Primary trading account updated successfully');
-        await loadTradingAccounts();
-      } else {
-        showError('Update Failed', result.message || 'Failed to set primary trading account');
-      }
-    } catch (error) {
-      console.error('Set primary trading account error:', error);
-      showError('Update Failed', 'Failed to set primary trading account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -682,7 +707,7 @@ const Broker: React.FC = () => {
                                 <h3 className="font-semibold text-slate-200">{connection.connectionName}</h3>
                                 {connection.isPrimary && (
                                   <div title="Primary connection">
-                                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                                    <Pin className="w-4 h-4 text-blue-400 fill-current" />
                                   </div>
                                 )}
                                 {connection.isActive && (
@@ -698,15 +723,15 @@ const Broker: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex items-center space-x-3">
-                            {/* Set Primary Star Button */}
+                            {/* Set Primary Pin Button */}
                             {!connection.isPrimary && (
                               <button
                                 onClick={() => handleSetPrimaryDataBroker(connection.id)}
                                 disabled={isLoading}
-                                className="p-2 hover:bg-yellow-900/50 rounded-sm transition-colors"
+                                className="p-2 hover:bg-blue-900/50 rounded-sm transition-colors"
                                 title="Set as primary"
                               >
-                                <Star className="w-4 h-4 text-slate-400 hover:text-yellow-400" />
+                                <Pin className="w-4 h-4 text-slate-400 hover:text-blue-400" />
                               </button>
                             )}
                             
@@ -881,6 +906,16 @@ const Broker: React.FC = () => {
                   <p className="text-xs md:text-sm text-slate-400">Manage accounts for order execution and live trading</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                  {/* Refresh button for trading accounts */}
+                  <button
+                    onClick={loadTradingAccounts}
+                    disabled={isLoading}
+                    className="p-2 hover:bg-slate-700 rounded-sm transition-colors"
+                    title="Refresh trading accounts"
+                  >
+                    <RefreshCw className={`w-5 h-5 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  
                   {/* Master Live Toggle */}
                   {tradingAccounts.length > 0 && (
                     <div className="flex items-center space-x-2 px-2 md:px-3 py-1.5 md:py-2 bg-slate-800/50 border border-slate-600/50 rounded-sm">
@@ -944,11 +979,53 @@ const Broker: React.FC = () => {
                 </div>
               )}
 
+              {/* Debug Panel - Remove in production */}
+              {true && (
+                <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-sm">
+                  <h4 className="text-xs font-semibold text-yellow-300 mb-2">DEBUG INFO</h4>
+                  <div className="text-xs text-yellow-200 space-y-1">
+                    <div>Master Toggle: <span className={masterLiveToggle ? 'text-green-400' : 'text-red-400'}>{masterLiveToggle ? 'ON' : 'OFF'}</span></div>
+                    <div>Total Accounts: {tradingAccounts.length}</div>
+                    <div>Live Accounts: {tradingAccounts.filter(acc => acc.isLive).length}</div>
+                    <div>All Live: {tradingAccounts.length > 0 ? (tradingAccounts.every(acc => acc.isLive) ? 'YES' : 'NO') : 'N/A'}</div>
+                    <div>Loading: {isLoading ? 'YES' : 'NO'}</div>
+                    <div className="mt-2">
+                      <div className="text-yellow-300 font-semibold">Account Details:</div>
+                      {tradingAccounts.map((acc: TradingAccount) => (
+                        <div key={acc.id} className="ml-2">
+                          {acc.accountName}: <span className={acc.isLive ? 'text-green-400' : 'text-red-400'}>{acc.isLive ? 'LIVE' : 'OFF'}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex space-x-2">
+                      <button
+                        onClick={() => BrokerService.bulkToggleLiveStatus(true).then(result => console.log('Bulk ON result:', result))}
+                        className="px-2 py-1 bg-green-600 text-white text-xs rounded"
+                      >
+                        Test Bulk ON
+                      </button>
+                      <button
+                        onClick={() => BrokerService.bulkToggleLiveStatus(false).then(result => console.log('Bulk OFF result:', result))}
+                        className="px-2 py-1 bg-red-600 text-white text-xs rounded"
+                      >
+                        Test Bulk OFF
+                      </button>
+                      <button
+                        onClick={loadTradingAccounts}
+                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
+                      >
+                        Reload
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Trading Accounts List */}
               {filteredAccounts.length > 0 ? (
                 <div className="space-y-4">
                   {filteredAccounts.map((account) => (
-                    <div key={account.id} className={`p-3 md:p-4 border rounded-sm ${account.isPrimary ? 'border-green-700/50 bg-green-900/20' : 'border-slate-700/50 bg-slate-800/30'} hover:border-slate-600/50 transition-colors`}>
+                    <div key={account.id} className="p-3 md:p-4 border rounded-sm border-slate-700/50 bg-slate-800/30 hover:border-slate-600/50 transition-colors">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                         <div className="flex items-start space-x-3 flex-1">
                           <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-600 to-blue-500 rounded-sm flex items-center justify-center flex-shrink-0">
@@ -957,12 +1034,6 @@ const Broker: React.FC = () => {
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                               <h4 className="font-semibold text-slate-200 text-sm md:text-base truncate">{account.accountName}</h4>
-                              {account.isPrimary && (
-                                <div className="flex items-center space-x-1 px-1.5 md:px-2 py-0.5 md:py-1 bg-green-900/30 border border-green-700/50 rounded-sm">
-                                  <Star className="w-2.5 h-2.5 md:w-3 md:h-3 text-green-400" />
-                                  <span className="text-xs text-green-300">Primary</span>
-                                </div>
-                              )}
                               {account.isLive && (
                                 <div className="flex items-center space-x-1 px-1.5 md:px-2 py-0.5 md:py-1 bg-green-900/30 border border-green-700/50 rounded-sm">
                                   <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -988,13 +1059,8 @@ const Broker: React.FC = () => {
                         </div>
                         
                         <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-4">
-                          {/* Primary Indicator and Balance Display */}
+                          {/* Balance Display */}
                           <div className="flex items-center space-x-2">
-                            {account.isPrimary && (
-                              <div className="flex items-center" title="Primary account">
-                                <Star className="w-3 h-3 md:w-4 md:h-4 text-yellow-400 fill-current" />
-                              </div>
-                            )}
                             <div className="text-right">
                               <div className="text-xs text-slate-500">Balance</div>
                               <div className="text-sm md:text-base font-semibold text-green-400">
@@ -1004,16 +1070,6 @@ const Broker: React.FC = () => {
                           </div>
                           
                           <div className="flex items-center space-x-1 sm:space-x-2">
-                            {!account.isPrimary && (
-                              <button
-                                onClick={() => handleSetPrimaryTradingAccount(account.id)}
-                                className="p-1.5 md:p-2 hover:bg-slate-700 rounded-sm transition-colors text-slate-400 hover:text-green-400"
-                                title="Set as primary"
-                              >
-                                <Star className="w-3 h-3 md:w-4 md:h-4" />
-                              </button>
-                            )}
-                            
                             {/* Live Trading Toggle */}
                             <div className="relative" title={`${account.isLive ? 'Disable' : 'Enable'} live trading`}>
                               <input

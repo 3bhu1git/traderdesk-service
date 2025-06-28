@@ -72,7 +72,10 @@ export interface DataBrokerCredentials {
 
 export interface LiveDataStatus {
   enabled: boolean;
+  liveDataEnabled?: boolean;
   primaryBroker?: DataBrokerConnection;
+  activeConnectionsCount?: number;
+  hasActiveConnections?: boolean;
 }
 
 class BrokerService {
@@ -384,12 +387,25 @@ class BrokerService {
   public static async bulkToggleLiveStatus(isLive: boolean): Promise<BrokerResponse> {
     try {
       console.log(`[BrokerService] Bulk toggling live status to ${isLive}`);
+      console.log(`[BrokerService] API URL: ${API_BASE_URL}/api/brokers/trading-accounts/bulk/live-status`);
+      console.log(`[BrokerService] Headers:`, this.getAuthHeaders());
 
       const response = await fetch(`${API_BASE_URL}/api/brokers/trading-accounts/bulk/live-status`, {
         method: 'PUT',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ isLive })
       });
+
+      console.log(`[BrokerService] Response status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[BrokerService] HTTP Error ${response.status}:`, errorText);
+        return {
+          success: false,
+          message: `HTTP ${response.status}: ${errorText || 'Request failed'}`
+        };
+      }
 
       const result = await response.json();
       console.log('[BrokerService] Bulk toggle live status response:', result);
@@ -399,7 +415,7 @@ class BrokerService {
       console.error('[BrokerService] Error bulk toggling live status:', error);
       return {
         success: false,
-        message: 'Failed to update accounts. Please try again.'
+        message: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
     }
   }

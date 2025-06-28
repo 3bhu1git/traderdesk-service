@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Menu, ChevronDown, Link as LinkIcon, MessageSquare, X, Activity, TrendingUp, AlertTriangle, Settings, Power } from 'lucide-react';
+import { Bell, Menu, ChevronDown, Link as LinkIcon, MessageSquare, X, Activity, TrendingUp, AlertTriangle, Settings } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import BrokerService from '../../services/brokerService';
@@ -24,7 +24,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const [connectedBrokers, setConnectedBrokers] = useState<any[]>([]);
   const [liveAccountsData, setLiveAccountsData] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
   const [liveDataEnabled, setLiveDataEnabled] = useState(false);
-  const [primaryDataBroker, setPrimaryDataBroker] = useState<any>(null);
+  const [hasActiveConnections, setHasActiveConnections] = useState(false);
 
   // Mock alerts data
   const alerts = [
@@ -133,12 +133,24 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       const liveData = await BrokerService.getLiveAccountsCount();
       setLiveAccountsData(liveData);
       
-      // Get live data status
+      // Get live data status and check for active connections
       try {
         const liveDataStatus = await BrokerService.getLiveDataStatus();
         if (liveDataStatus.success && liveDataStatus.data) {
-          setLiveDataEnabled(liveDataStatus.data.enabled);
-          setPrimaryDataBroker(liveDataStatus.data.primaryBroker);
+          // Update based on active connections, not just the setting
+          setLiveDataEnabled(liveDataStatus.data.enabled || false);
+          setHasActiveConnections(liveDataStatus.data.hasActiveConnections || false);
+        }
+
+        // Also check data broker connections directly for more accurate status
+        const dataBrokerResult = await BrokerService.getDataBrokerConnections();
+        if (dataBrokerResult.success && dataBrokerResult.data?.connections) {
+          const activeConnectionsCount = dataBrokerResult.data.connections.filter((conn: any) => conn.isActive).length;
+          const hasActive = activeConnectionsCount > 0;
+          
+          // Update states with the most accurate information
+          setHasActiveConnections(hasActive);
+          setLiveDataEnabled(hasActive);
         }
       } catch (error) {
         console.error('Error fetching live data status:', error);
@@ -160,8 +172,37 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       const result = await BrokerService.toggleLiveDataIntegration(newState);
       
       if (result.success) {
-        setLiveDataEnabled(newState);
-        // Optionally show a success message
+        // Update states based on the result
+        const updatedEnabled = result.data?.hasActiveConnections || false;
+        setLiveDataEnabled(updatedEnabled);
+        setHasActiveConnections(updatedEnabled);
+        
+        // Refresh the broker connections to reflect changes
+        setTimeout(async () => {
+          try {
+            // Get fresh data from both endpoints
+            const [liveDataStatus, dataBrokerResult] = await Promise.all([
+              BrokerService.getLiveDataStatus(),
+              BrokerService.getDataBrokerConnections()
+            ]);
+            
+            if (liveDataStatus.success && liveDataStatus.data) {
+              const hasActive = liveDataStatus.data.hasActiveConnections || false;
+              setLiveDataEnabled(hasActive);
+              setHasActiveConnections(hasActive);
+            }
+            
+            // Double-check with data broker connections
+            if (dataBrokerResult.success && dataBrokerResult.data?.connections) {
+              const activeCount = dataBrokerResult.data.connections.filter((conn: any) => conn.isActive).length;
+              const hasActiveConnections = activeCount > 0;
+              setHasActiveConnections(hasActiveConnections);
+              setLiveDataEnabled(hasActiveConnections);
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing connection status:', refreshError);
+          }
+        }, 300);
       } else {
         // Handle error - could show notification
         console.error('Failed to toggle live data:', result.message);
@@ -283,7 +324,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                 checked={liveDataEnabled}
                 onChange={handleLiveDataToggle}
                 className="sr-only"
-                disabled={!primaryDataBroker}
               />
               <label
                 htmlFor="live-data-toggle"
@@ -291,7 +331,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   liveDataEnabled
                     ? 'bg-gradient-to-r from-green-600 to-green-500 shadow-lg shadow-green-500/25'
                     : 'bg-slate-600'
-                } ${!primaryDataBroker ? 'opacity-50 cursor-not-allowed' : ''}`}
+                }`}
               >
                 <span
                   className={`inline-block w-3 h-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
@@ -300,7 +340,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                 />
               </label>
             </div>
-            <Power className={`w-3 h-3 ${liveDataEnabled ? 'text-green-400' : 'text-slate-400'}`} />
           </div>
 
           {/* Broker Connections - Hidden on mobile */}
@@ -316,11 +355,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   {liveAccountsData.count}/{liveAccountsData.total}
                 </span>
               )}
-              {/* Data Integration Status - Green when connected */}
-              {connectedBrokers.length > 0 ? (
+              {/* Data Integration Status - Green when any connection is active */}
+              {hasActiveConnections ? (
                 <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" title="Data integration active"></div>
               ) : (
-                <div className="w-1.5 h-1.5 bg-red-400 rounded-full" title="No data integration"></div>
+                <div className="w-1.5 h-1.5 bg-red-400 rounded-full" title="No active data integration"></div>
               )}
             </button>
 
@@ -517,12 +556,12 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             >
               <div className="w-6 h-6 bg-gradient-to-br from-green-600 to-green-500 rounded-sm flex items-center justify-center">
                 <span className="text-xs font-bold text-white font-mono">
-                  {user?.phone?.slice(-2) || user?.name?.slice(0, 2) || 'TD'}
+                  {user?.name?.slice(0, 2).toUpperCase() || user?.phone?.slice(-2) || 'TD'}
                 </span>
               </div>
               <div className="hidden sm:block text-left">
                 <div className="text-xs font-medium text-slate-200 font-mono">
-                  {user?.phone?.slice(-4) || user?.name || 'Trader'}
+                  {user?.name || user?.phone?.slice(-4) || 'Trader'}
                 </div>
                 <div className="text-xs text-green-400 font-mono">PRO</div>
               </div>
@@ -536,12 +575,12 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   <div className="flex items-center space-x-2">
                     <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-green-500 rounded-sm flex items-center justify-center">
                       <span className="text-xs font-bold text-white font-mono">
-                        {user?.phone?.slice(-2) || 'TD'}
+                        {user?.name?.slice(0, 2).toUpperCase() || user?.phone?.slice(-2) || 'TD'}
                       </span>
                     </div>
                     <div>
                       <div className="text-xs font-medium text-slate-200 font-mono">
-                        {user?.phone || 'Professional Trader'}
+                        {user?.name || user?.phone || 'Professional Trader'}
                       </div>
                       <div className="text-xs text-green-400 font-mono">PREMIUM ACCOUNT</div>
                     </div>
