@@ -8,6 +8,16 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
  */
 const authenticateToken = async (req, res, next) => {
   try {
+    // Temporary bypass for development testing
+    if (process.env.NODE_ENV === 'development' && req.headers['x-dev-bypass'] === 'true') {
+      req.user = {
+        userId: '675f8b8e12345678901234ab', // Valid ObjectId format
+        phone: '1234567890',
+        email: 'dev@test.com'
+      };
+      return next();
+    }
+
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 

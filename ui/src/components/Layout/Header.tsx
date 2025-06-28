@@ -11,17 +11,14 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [showBrokerDropdown, setShowBrokerDropdown] = useState(false);
   const [showAlertsDropdown, setShowAlertsDropdown] = useState(false);
   const [showMessagesDropdown, setShowMessagesDropdown] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const alertsRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const [marketStatus, setMarketStatus] = useState<'open' | 'closed'>('closed');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [connectedBrokers, setConnectedBrokers] = useState<any[]>([]);
   const [liveAccountsData, setLiveAccountsData] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
   const [liveDataEnabled, setLiveDataEnabled] = useState(false);
   const [hasActiveConnections, setHasActiveConnections] = useState(false);
@@ -110,25 +107,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   // Check for connected brokers and live data status
   useEffect(() => {
     const checkConnectedBrokers = async () => {
-      const brokers = [];
-      
-      // Check for Dhan using BrokerService
-      if (BrokerService.isDhanConnected()) {
-        const credentials = BrokerService.getDhanCredentials();
-        if (credentials) {
-          brokers.push({
-            id: 1,
-            name: 'Dhan',
-            status: 'connected',
-            logo: '🟢',
-            latency: '8ms',
-            clientId: credentials.clientId
-          });
-        }
-      }
-      
-      setConnectedBrokers(brokers);
-      
       // Get live accounts data
       const liveData = await BrokerService.getLiveAccountsCount();
       setLiveAccountsData(liveData);
@@ -239,9 +217,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowBrokerDropdown(false);
-      }
       if (alertsRef.current && !alertsRef.current.contains(event.target as Node)) {
         setShowAlertsDropdown(false);
       }
@@ -343,9 +318,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           </div>
 
           {/* Broker Connections - Hidden on mobile */}
-          <div className="relative hidden lg:block" ref={dropdownRef}>
+          <div className="relative hidden lg:block">
             <button
-              onClick={() => setShowBrokerDropdown(!showBrokerDropdown)}
+              onClick={() => {
+                navigate('/broker#trading');
+              }}
               className="flex items-center space-x-1.5 px-2 py-1.5 bg-slate-800/60 border border-slate-600/50 rounded-sm hover:bg-slate-700/60 transition-colors text-xs"
             >
               <LinkIcon className="w-3 h-3 text-green-400" />
@@ -362,51 +339,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                 <div className="w-1.5 h-1.5 bg-red-400 rounded-full" title="No active data integration"></div>
               )}
             </button>
-
-            {showBrokerDropdown && (
-              <div className="absolute right-0 top-full mt-1 w-72 bg-slate-900/90 backdrop-blur-2xl rounded-sm shadow-2xl border border-slate-700/50 z-[90]"
-                style={{ backdropFilter: 'blur(32px) saturate(180%)' }}>
-                <div className="p-2 border-b border-slate-700/50 bg-slate-800/20 backdrop-blur-sm">
-                  <h3 className="text-xs font-semibold text-slate-200 font-mono">CONNECTED BROKERS</h3>
-                </div>
-                
-                <div className="p-1 max-h-48 overflow-y-auto professional-scroll">
-                  {connectedBrokers.length > 0 ? (
-                    connectedBrokers.map((broker) => (
-                      <div key={broker.id} className="flex items-center justify-between p-2 rounded-sm hover:bg-slate-800/50">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-6 h-6 bg-slate-800 rounded-sm flex items-center justify-center">
-                            <span className="text-xs">{broker.logo}</span>
-                          </div>
-                          <div>
-                            <div className="text-xs font-medium text-slate-200">{broker.name}</div>
-                            <div className="text-xs text-slate-400 font-mono">ID: {broker.clientId}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <span className="text-xs text-green-400 bg-green-900/30 px-1.5 py-0.5 rounded-sm font-mono border border-green-700/50">
-                            LIVE
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-4 text-center">
-                      <p className="text-slate-400 text-sm">No brokers connected</p>
-                      <button
-                        onClick={() => {
-                          setShowBrokerDropdown(false);
-                          navigate('/broker');
-                        }}
-                        className="mt-2 text-xs text-green-400 hover:text-green-300"
-                      >
-                        Connect a broker
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Alerts Dropdown */}

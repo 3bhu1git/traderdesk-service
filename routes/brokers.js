@@ -52,7 +52,7 @@ router.delete('/trading-accounts/:accountId', deleteTradingAccount);
 router.put('/trading-accounts/primary', setPrimaryTradingAccount);
 
 // Live trading toggle routes
-router.put('/trading-accounts/:accountId/live-status', toggleAccountLiveStatus);
 router.put('/trading-accounts/bulk/live-status', bulkToggleLiveStatus);
+router.put('/trading-accounts/:accountId/live-status', toggleAccountLiveStatus);
 
 module.exports = router;

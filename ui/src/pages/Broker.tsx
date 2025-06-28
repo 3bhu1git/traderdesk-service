@@ -65,6 +65,14 @@ const Broker: React.FC = () => {
     loadTradingAccounts();
   }, []);
 
+  // Check URL hash and switch to appropriate tab
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash === '#trading') {
+      setActiveTab('trading');
+    }
+  }, []);
+
   const loadDataBrokerConnections = async () => {
     try {
       const result = await BrokerService.getDataBrokerConnections();
@@ -133,21 +141,16 @@ const Broker: React.FC = () => {
   // Load trading accounts and update master toggle state
   const loadTradingAccounts = async () => {
     try {
-      console.log('[Broker] Loading trading accounts...');
       const result = await BrokerService.getTradingAccounts();
       if (result.success) {
         const accounts = result.data?.accounts || [];
-        console.log(`[Broker] Loaded ${accounts.length} accounts:`, accounts.map((acc: TradingAccount) => ({ id: acc.id, name: acc.accountName, isLive: acc.isLive })));
         setTradingAccounts(accounts);
         
         // Update master toggle based on accounts - true if ALL accounts are live (or no accounts)
         if (accounts.length === 0) {
-          console.log('[Broker] No accounts found, setting master toggle to false');
           setMasterLiveToggle(false);
         } else {
           const allLive = accounts.every((account: TradingAccount) => account.isLive);
-          const liveCount = accounts.filter((account: TradingAccount) => account.isLive).length;
-          console.log(`[Broker] ${liveCount}/${accounts.length} accounts are live, all live: ${allLive}`);
           setMasterLiveToggle(allLive);
         }
       } else {
@@ -162,44 +165,39 @@ const Broker: React.FC = () => {
   const handleMasterLiveToggle = async () => {
     const newState = !masterLiveToggle;
     
-    console.log(`[Broker] Master toggle clicked: current=${masterLiveToggle}, new=${newState}`);
-    console.log(`[Broker] Current accounts:`, tradingAccounts.map(acc => ({ id: acc.id, name: acc.accountName, isLive: acc.isLive })));
+    // Set loading state to prevent multiple clicks
+    setIsLoading(true);
     
-    // Don't update local state optimistically for master toggle to avoid confusion
     try {
-      console.log(`[Broker] Calling BrokerService.bulkToggleLiveStatus(${newState})`);
       const result = await BrokerService.bulkToggleLiveStatus(newState);
-      console.log('[Broker] Bulk toggle API response:', result);
       
       if (result.success) {
-        console.log('[Broker] Bulk toggle successful, updating UI');
         showSuccess('Master Toggle Updated', result.message || `All accounts ${newState ? 'enabled for' : 'disabled from'} live trading`);
         
-        // Immediately update the accounts to reflect the new state
+        // Immediately update the accounts and master toggle to reflect the new state
         const updatedAccounts = tradingAccounts.map(account => ({
           ...account,
           isLive: newState
         }));
-        console.log('[Broker] Setting updated accounts:', updatedAccounts.map(acc => ({ id: acc.id, name: acc.accountName, isLive: acc.isLive })));
         setTradingAccounts(updatedAccounts);
         setMasterLiveToggle(newState);
         
         // Also reload from server to ensure consistency
         setTimeout(() => {
-          console.log('[Broker] Reloading accounts from server after 100ms...');
           loadTradingAccounts();
         }, 100);
       } else {
-        console.error('[Broker] Bulk toggle failed:', result);
         showError('Update Failed', result.message || `Failed to update accounts`);
         // Reload accounts to ensure correct state
         await loadTradingAccounts();
       }
     } catch (error) {
-      console.error('[Broker] Bulk toggle error:', error);
+      console.error('Bulk toggle error:', error);
       showError('Update Failed', 'Failed to update accounts. Please try again.');
       // Reload accounts to ensure correct state
       await loadTradingAccounts();
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -286,14 +284,12 @@ const Broker: React.FC = () => {
       // Update master toggle based on the optimistic update
       if (updatedAccounts.length > 0) {
         const allLive = updatedAccounts.every(account => account.isLive);
-        console.log(`[Broker] Setting master toggle to ${allLive} (all accounts live: ${allLive})`);
         setMasterLiveToggle(allLive);
       }
 
       const result = await BrokerService.toggleAccountLiveStatus(accountId, !currentLiveStatus);
       
       if (result.success) {
-        console.log('[Broker] Individual toggle successful:', result);
         showSuccess('Status Updated', result.message || `Account ${!currentLiveStatus ? 'enabled for' : 'disabled from'} live trading`);
         
         // Refresh trading accounts to ensure consistency and update master toggle
@@ -301,7 +297,7 @@ const Broker: React.FC = () => {
           loadTradingAccounts();
         }, 100);
       } else {
-        console.error('[Broker] Individual toggle failed:', result);
+        console.error('Individual toggle failed:', result);
         // Revert optimistic update on failure
         setTradingAccounts(prev => 
           prev.map(account => 
@@ -315,7 +311,7 @@ const Broker: React.FC = () => {
         showError('Update Failed', result.message || 'Failed to update live trading status');
       }
     } catch (error) {
-      console.error('[Broker] Individual toggle error:', error);
+      console.error('Individual toggle error:', error);
       // Revert optimistic update on error
       setTradingAccounts(prev => 
         prev.map(account => 
@@ -697,41 +693,48 @@ const Broker: React.FC = () => {
                           ? 'border-green-700/50 bg-green-900/20' 
                           : 'border-slate-700/50 bg-slate-800/30'
                       }`}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                           <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-500 rounded-sm flex items-center justify-center">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-600 to-blue-500 rounded-sm flex items-center justify-center">
                               <span className="text-white font-bold text-xs">{connection.brokerName.slice(0, 4).toUpperCase()}</span>
                             </div>
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center space-x-2">
-                                <h3 className="font-semibold text-slate-200">{connection.connectionName}</h3>
+                                <h3 className="font-semibold text-slate-200 truncate">{connection.connectionName}</h3>
                                 {connection.isPrimary && (
                                   <div title="Primary connection">
-                                    <Pin className="w-4 h-4 text-blue-400 fill-current" />
+                                    <Pin className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400 fill-current flex-shrink-0" />
                                   </div>
                                 )}
                                 {connection.isActive && (
-                                  <span className="text-xs bg-green-900/30 border border-green-700/50 text-green-300 px-2 py-1 rounded-sm font-mono">
+                                  <span className="text-xs bg-green-900/30 border border-green-700/50 text-green-300 px-2 py-1 rounded-sm font-mono flex-shrink-0">
                                     CONNECTED
                                   </span>
                                 )}
                               </div>
-                              <p className="text-sm text-slate-400">{connection.brokerName} • Client ID: {connection.clientId}</p>
-                              {connection.lastConnected && (
-                                <p className="text-xs text-slate-500">Last connected: {new Date(connection.lastConnected).toLocaleString()}</p>
-                              )}
+                              {/* Hide details on mobile, show only connection name */}
+                              <div className="hidden sm:block">
+                                <p className="text-sm text-slate-400">{connection.brokerName} • Client ID: {connection.clientId}</p>
+                                {connection.lastConnected && (
+                                  <p className="text-xs text-slate-500">Last connected: {new Date(connection.lastConnected).toLocaleString()}</p>
+                                )}
+                              </div>
+                              {/* Mobile: Show only broker name */}
+                              <div className="sm:hidden">
+                                <p className="text-sm text-slate-400 truncate">{connection.brokerName}</p>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-3">
+                          <div className="flex items-center justify-end space-x-2 sm:space-x-3 flex-shrink-0">
                             {/* Set Primary Pin Button */}
                             {!connection.isPrimary && (
                               <button
                                 onClick={() => handleSetPrimaryDataBroker(connection.id)}
                                 disabled={isLoading}
-                                className="p-2 hover:bg-blue-900/50 rounded-sm transition-colors"
+                                className="p-1.5 sm:p-2 hover:bg-blue-900/50 rounded-sm transition-colors"
                                 title="Set as primary"
                               >
-                                <Pin className="w-4 h-4 text-slate-400 hover:text-blue-400" />
+                                <Pin className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hover:text-blue-400" />
                               </button>
                             )}
                             
@@ -740,38 +743,40 @@ const Broker: React.FC = () => {
                               <button
                                 onClick={() => handleDisconnectDataBroker(connection.id)}
                                 disabled={isLoading}
-                                className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-sm transition-colors disabled:opacity-50 text-sm"
+                                className="px-2 py-1.5 sm:px-3 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-sm transition-colors disabled:opacity-50 text-xs sm:text-sm"
                                 title="Disconnect from live data"
                               >
-                                Disconnect
+                                <span className="hidden sm:inline">Disconnect</span>
+                                <span className="sm:hidden">Off</span>
                               </button>
                             ) : (
                               <button
                                 onClick={() => handleConnectDataBroker(connection.id)}
                                 disabled={isLoading}
-                                className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-sm transition-colors disabled:opacity-50 text-sm"
+                                className="px-2 py-1.5 sm:px-3 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded-sm transition-colors disabled:opacity-50 text-xs sm:text-sm"
                                 title="Connect for live data"
                               >
-                                Connect
+                                <span className="hidden sm:inline">Connect</span>
+                                <span className="sm:hidden">On</span>
                               </button>
                             )}
                             
                             <button
                               onClick={() => handleEditDataBrokerConnection(connection)}
                               disabled={isLoading}
-                              className="p-2 hover:bg-slate-700 rounded-sm transition-colors"
+                              className="p-1.5 sm:p-2 hover:bg-slate-700 rounded-sm transition-colors"
                               title="Edit connection"
                             >
-                              <Edit3 className="w-4 h-4 text-slate-400" />
+                              <Edit3 className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />
                             </button>
                             
                             <button
                               onClick={() => handleDeleteDataBrokerConnection(connection.id)}
                               disabled={isLoading}
-                              className="p-2 hover:bg-red-900/50 rounded-sm transition-colors"
+                              className="p-1.5 sm:p-2 hover:bg-red-900/50 rounded-sm transition-colors"
                               title="Delete connection"
                             >
-                              <Trash2 className="w-4 h-4 text-red-400" />
+                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 text-red-400" />
                             </button>
                           </div>
                         </div>
@@ -900,17 +905,17 @@ const Broker: React.FC = () => {
 
           {activeTab === 'trading' && (
             <div>
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 md:mb-6 space-y-3 md:space-y-0">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 mb-6">
                 <div>
-                  <h2 className="text-lg md:text-xl font-semibold text-slate-200">Trading Accounts</h2>
-                  <p className="text-xs md:text-sm text-slate-400">Manage accounts for order execution and live trading</p>
+                  <h2 className="text-xl font-semibold text-slate-200">Trading Accounts</h2>
+                  <p className="text-sm text-slate-400">Manage accounts for order execution and live trading</p>
                 </div>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
                   {/* Refresh button for trading accounts */}
                   <button
                     onClick={loadTradingAccounts}
                     disabled={isLoading}
-                    className="p-2 hover:bg-slate-700 rounded-sm transition-colors"
+                    className="p-2 hover:bg-slate-700 rounded-sm transition-colors self-start sm:self-auto"
                     title="Refresh trading accounts"
                   >
                     <RefreshCw className={`w-5 h-5 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} />
@@ -918,47 +923,51 @@ const Broker: React.FC = () => {
                   
                   {/* Master Live Toggle */}
                   {tradingAccounts.length > 0 && (
-                    <div className="flex items-center space-x-2 px-2 md:px-3 py-1.5 md:py-2 bg-slate-800/50 border border-slate-600/50 rounded-sm">
-                      <span className="text-xs md:text-sm text-slate-300 whitespace-nowrap">Master Live:</span>
+                    <div className="flex items-center space-x-2 px-3 py-2 bg-slate-800/50 border border-slate-600/50 rounded-sm">
+                      <span className="text-sm text-slate-300 whitespace-nowrap">Master Live:</span>
                       <div className="relative" title={`${masterLiveToggle ? 'Disable' : 'Enable'} all accounts for live trading`}>
                         <input
                           type="checkbox"
                           id="master-live-toggle"
                           checked={masterLiveToggle}
                           onChange={handleMasterLiveToggle}
+                          disabled={isLoading}
                           className="sr-only"
                         />
                         <label
                           htmlFor="master-live-toggle"
-                          className={`relative inline-flex items-center h-5 w-9 md:h-6 md:w-11 rounded-full cursor-pointer transition-all duration-200 ${
+                          className={`relative inline-flex items-center h-5 w-9 rounded-full transition-all duration-200 ${
+                            isLoading 
+                              ? 'cursor-not-allowed opacity-50' 
+                              : 'cursor-pointer'
+                          } ${
                             masterLiveToggle
                               ? 'bg-gradient-to-r from-green-600 to-green-500 shadow-lg shadow-green-500/25'
                               : 'bg-slate-600'
                           }`}
                         >
                           <span
-                            className={`inline-block w-3 h-3 md:w-4 md:h-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
-                              masterLiveToggle ? 'translate-x-5 md:translate-x-6' : 'translate-x-1'
+                            className={`inline-block w-3 h-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+                              masterLiveToggle ? 'translate-x-5' : 'translate-x-1'
                             }`}
                           />
                         </label>
                       </div>
-                      <Power className={`w-3 h-3 md:w-4 md:h-4 ${masterLiveToggle ? 'text-green-400' : 'text-slate-400'}`} />
+                      <Power className={`w-4 h-4 ${masterLiveToggle ? 'text-green-400' : 'text-slate-400'}`} />
                     </div>
                   )}
                   
                   <button
                     onClick={() => setShowTradingForm(true)}
                     disabled={editingAccount !== null}
-                    className={`flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 rounded-sm font-semibold transition-all duration-200 shadow-lg text-sm md:text-base ${
+                    className={`flex items-center justify-center space-x-2 px-4 py-2 rounded-sm font-semibold transition-all duration-200 shadow-lg ${
                       editingAccount !== null
                         ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:shadow-blue-500/25'
                     }`}
                   >
-                    <Plus className="w-3 h-3 md:w-4 md:h-4" />
-                    <span className="hidden sm:inline">Add Account</span>
-                    <span className="sm:hidden">Add</span>
+                    <Plus className="w-4 h-4" />
+                    <span>Add Account</span>
                   </button>
                 </div>
               </div>
@@ -979,47 +988,7 @@ const Broker: React.FC = () => {
                 </div>
               )}
 
-              {/* Debug Panel - Remove in production */}
-              {true && (
-                <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-sm">
-                  <h4 className="text-xs font-semibold text-yellow-300 mb-2">DEBUG INFO</h4>
-                  <div className="text-xs text-yellow-200 space-y-1">
-                    <div>Master Toggle: <span className={masterLiveToggle ? 'text-green-400' : 'text-red-400'}>{masterLiveToggle ? 'ON' : 'OFF'}</span></div>
-                    <div>Total Accounts: {tradingAccounts.length}</div>
-                    <div>Live Accounts: {tradingAccounts.filter(acc => acc.isLive).length}</div>
-                    <div>All Live: {tradingAccounts.length > 0 ? (tradingAccounts.every(acc => acc.isLive) ? 'YES' : 'NO') : 'N/A'}</div>
-                    <div>Loading: {isLoading ? 'YES' : 'NO'}</div>
-                    <div className="mt-2">
-                      <div className="text-yellow-300 font-semibold">Account Details:</div>
-                      {tradingAccounts.map((acc: TradingAccount) => (
-                        <div key={acc.id} className="ml-2">
-                          {acc.accountName}: <span className={acc.isLive ? 'text-green-400' : 'text-red-400'}>{acc.isLive ? 'LIVE' : 'OFF'}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-2 flex space-x-2">
-                      <button
-                        onClick={() => BrokerService.bulkToggleLiveStatus(true).then(result => console.log('Bulk ON result:', result))}
-                        className="px-2 py-1 bg-green-600 text-white text-xs rounded"
-                      >
-                        Test Bulk ON
-                      </button>
-                      <button
-                        onClick={() => BrokerService.bulkToggleLiveStatus(false).then(result => console.log('Bulk OFF result:', result))}
-                        className="px-2 py-1 bg-red-600 text-white text-xs rounded"
-                      >
-                        Test Bulk OFF
-                      </button>
-                      <button
-                        onClick={loadTradingAccounts}
-                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
-                      >
-                        Reload
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Trading Accounts List */}
               {filteredAccounts.length > 0 ? (

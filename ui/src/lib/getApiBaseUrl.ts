@@ -16,7 +16,7 @@ export function getApiBaseUrl(): string {
   // Fallback to the profile-based logic
   const codespaceUrl = import.meta.env.VITE_CODESPACE_URL || process.env.CODESPACE_URL || '';
   const profile = import.meta.env.VITE_PROFILE || process.env.PROFILE || 'dev';
-  const localUrl = import.meta.env.VITE_LOCAL_URL || process.env.LOCAL_URL || 'http://localhost:3000';
+  const localUrl = import.meta.env.VITE_LOCAL_URL || process.env.LOCAL_URL || 'http://localhost:3002';
 
   if (codespaceUrl && profile === 'prod') {
     return codespaceUrl;

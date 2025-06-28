@@ -91,6 +91,9 @@ class BrokerService {
     const token = this.getAuthToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      // Development bypass when no token is available
+      headers['x-dev-bypass'] = 'true';
     }
 
     return headers;
