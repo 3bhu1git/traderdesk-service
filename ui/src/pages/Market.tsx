@@ -19,9 +19,31 @@ import {
   Loader
 } from 'lucide-react';
 import { DataService } from '../services/DataService';
+import MarketIntelligenceService, { 
+  MarketOverview, 
+  SectorPerformance, 
+  FIIDIIActivity, 
+  TopMovers, 
+  InstitutionalActivity 
+} from '../services/marketIntelligenceService';
+import MarketOverviewWidget from '../components/MarketIntelligence/MarketOverviewWidget';
+import SectorPerformanceWidget from '../components/MarketIntelligence/SectorPerformanceWidget';
+import FIIDIIWidget from '../components/MarketIntelligence/FIIDIIWidget';
+import TopMoversWidget from '../components/MarketIntelligence/TopMoversWidget';
+import InstitutionalInsightsWidget from '../components/MarketIntelligence/InstitutionalInsightsWidget';
 
 const Market: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'sector' | 'fii-dii' | 'rotation'>('overview');
+  const [activeTab, setActiveTab] = useState<'intelligence' | 'legacy'>('intelligence');
+  
+  // New Market Intelligence State
+  const [marketOverview, setMarketOverview] = useState<MarketOverview | null>(null);
+  const [sectorPerformance, setSectorPerformance] = useState<SectorPerformance | null>(null);
+  const [fiiDiiActivity, setFiiDiiActivity] = useState<FIIDIIActivity | null>(null);
+  const [topMovers, setTopMovers] = useState<TopMovers | null>(null);
+  const [institutionalActivity, setInstitutionalActivity] = useState<InstitutionalActivity | null>(null);
+  const [isIntelligenceLoading, setIsIntelligenceLoading] = useState(true);
+  
+  // Legacy State
   const [fiiDiiData, setFiiDiiData] = useState<any[]>([]);
   const [sectorData, setSectorData] = useState<any[]>([]);
   const [marketData, setMarketData] = useState<any | null>(null);
@@ -30,32 +52,51 @@ const Market: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [selectedTimeframe, setSelectedTimeframe] = useState<'1D' | '5D' | '1M' | '3M'>('5D');
-  const [isDhanConnected, setIsDhanConnected] = useState(false);
   
-  // Initialize data service
+  // Initialize services
   const dataService = DataService.getInstance();
+  const marketIntelligenceService = MarketIntelligenceService.getInstance();
 
   useEffect(() => {
-    // Check if Dhan credentials exist in localStorage
-    const storedCredentials = localStorage.getItem('dhanCredentials');
-    if (storedCredentials) {
-      setIsDhanConnected(true);
-    }
-
-    fetchAllData();
+    fetchMarketIntelligenceData();
+    fetchLegacyData();
     
     // Set up auto-refresh interval (every 5 minutes)
     const refreshInterval = setInterval(() => {
-      fetchAllData();
+      fetchMarketIntelligenceData();
+      fetchLegacyData();
     }, 5 * 60 * 1000);
     
     return () => clearInterval(refreshInterval);
   }, []);
 
-  const fetchAllData = async () => {
+  const fetchMarketIntelligenceData = async () => {
+    setIsIntelligenceLoading(true);
+    try {
+      const [overview, sectors, fiiDii, movers, institutional] = await Promise.all([
+        marketIntelligenceService.getMarketOverview(),
+        marketIntelligenceService.getSectorPerformance(),
+        marketIntelligenceService.getFIIDIIActivity(),
+        marketIntelligenceService.getTopMovers(5),
+        marketIntelligenceService.getInstitutionalActivity()
+      ]);
+      
+      setMarketOverview(overview);
+      setSectorPerformance(sectors);
+      setFiiDiiActivity(fiiDii);
+      setTopMovers(movers);
+      setInstitutionalActivity(institutional);
+    } catch (error) {
+      console.error('Error fetching market intelligence data:', error);
+    } finally {
+      setIsIntelligenceLoading(false);
+    }
+  };
+
+  const fetchLegacyData = async () => {
     setIsLoading(true);
     try {
-      // Fetch all data in parallel using the centralized data service
+      // Fetch legacy data in parallel using the centralized data service
       const [marketDataResult, sectorDataResult, fiiDiiDataResult, topGainersResult, topLosersResult] = await Promise.all([
         dataService.getMarketData(),
         dataService.getSectorData(),
@@ -71,14 +112,18 @@ const Market: React.FC = () => {
       setTopLosers(topLosersResult);
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Error fetching market data:', error);
+      console.error('Error fetching legacy market data:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const refreshData = async () => {
-    await fetchAllData();
+    if (activeTab === 'intelligence') {
+      await fetchMarketIntelligenceData();
+    } else {
+      await fetchLegacyData();
+    }
   };
 
   const getMaxValue = () => {
@@ -933,10 +978,8 @@ const Market: React.FC = () => {
       <div className="professional-card p-2 border border-slate-700/50">
         <div className="flex space-x-1 overflow-x-auto">
           {[
-            { id: 'overview', label: 'MARKET OVERVIEW', icon: Eye },
-            { id: 'sector', label: 'SECTOR ANALYSIS', icon: BarChart3 },
-            { id: 'fii-dii', label: 'INSTITUTIONAL FLOWS', icon: Building2 },
-            { id: 'rotation', label: 'SECTOR ROTATION', icon: RotateCcw }
+            { id: 'intelligence', label: 'MARKET INTELLIGENCE', icon: Eye },
+            { id: 'legacy', label: 'LEGACY VIEW', icon: Database }
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -959,10 +1002,32 @@ const Market: React.FC = () => {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto professional-scroll">
-        {activeTab === 'overview' && renderOverviewTab()}
-        {activeTab === 'sector' && renderSectorTab()}
-        {activeTab === 'fii-dii' && renderFiiDiiTab()}
-        {activeTab === 'rotation' && renderRotationTab()}
+        {activeTab === 'intelligence' && (
+          <div className="space-y-6">
+            {/* Market Overview Widget */}
+            <MarketOverviewWidget data={marketOverview} isLoading={isIntelligenceLoading} />
+            
+            {/* Grid Layout for Intelligence Widgets */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <SectorPerformanceWidget data={sectorPerformance} isLoading={isIntelligenceLoading} />
+              <FIIDIIWidget data={fiiDiiActivity} isLoading={isIntelligenceLoading} />
+            </div>
+            
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <TopMoversWidget data={topMovers} isLoading={isIntelligenceLoading} />
+              <InstitutionalInsightsWidget data={institutionalActivity} isLoading={isIntelligenceLoading} />
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'legacy' && (
+          <div className="space-y-6">
+            {renderOverviewTab()}
+            {renderSectorTab()}
+            {renderFiiDiiTab()}
+            {renderRotationTab()}
+          </div>
+        )}
       </div>
 
       {/* Professional Status Bar */}

@@ -14,6 +14,7 @@ const portfolioRoutes = require('./routes/portfolio');
 const marketDataRoutes = require('./routes/marketData');
 const brokerRoutes = require('./routes/broker');
 const brokersRoutes = require('./routes/brokers');
+const marketIntelligenceRoutes = require('./routes/marketIntelligence');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const WebSocketService = require('./services/websocket');

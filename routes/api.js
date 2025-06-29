@@ -4,11 +4,15 @@ const { validateApiKey, validateToken, rateLimiter } = require('../middleware/se
 const marketDataController = require('../controllers/marketDataController');
 const orderController = require('../controllers/orderController');
 const portfolioController = require('../controllers/portfolioController');
+const marketIntelligenceRoutes = require('./marketIntelligence');
 
 // Apply security middleware to all routes
 router.use(validateApiKey);
 router.use(validateToken);
 router.use(rateLimiter);
+
+// Market Intelligence Routes
+router.use('/market-intelligence', marketIntelligenceRoutes);
 
 // Market Data Routes
 router.get('/live-price/:symbol', marketDataController.getLivePrice);
