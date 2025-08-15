@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const axios = require('axios');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('js-yaml');
 const fs = require('fs');
@@ -52,6 +53,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Middleware
+app.use('/api/chartink-proxy', express.text({ type: 'application/x-www-form-urlencoded' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(logger.requestLogger);
@@ -79,6 +81,157 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Basic route for health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
+});
+
+// Helper function to get CSRF token from Chartink
+const getChartinkCSRFToken = async () => {
+    try {
+        console.log('Fetching Chartink screener page...');
+        const response = await axios({
+            method: 'GET',
+            url: 'https://chartink.com/screener',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache'
+            },
+            timeout: 10000
+        });
+
+        console.log('Chartink page response status:', response.status);
+        console.log('Response data length:', response.data.length);
+
+        // Extract CSRF token from HTML - try multiple patterns
+        const html = response.data;
+        let token = null;
+        
+        // Pattern 1: name="_token" value="..."
+        let csrfMatch = html.match(/name="_token"[^>]*value="([^"]+)"/i);
+        if (csrfMatch) {
+            token = csrfMatch[1];
+            console.log('Found CSRF token with pattern 1');
+        }
+        
+        // Pattern 2: value="..." name="_token"
+        if (!token) {
+            csrfMatch = html.match(/value="([^"]+)"[^>]*name="_token"/i);
+            if (csrfMatch) {
+                token = csrfMatch[1];
+                console.log('Found CSRF token with pattern 2');
+            }
+        }
+        
+        // Pattern 3: csrf-token meta tag
+        if (!token) {
+            csrfMatch = html.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/i);
+            if (csrfMatch) {
+                token = csrfMatch[1];
+                console.log('Found CSRF token with pattern 3 (meta tag)');
+            }
+        }
+        
+        // Pattern 4: window.Laravel.csrfToken or similar
+        if (!token) {
+            csrfMatch = html.match(/['"_]token['"]?\s*[:=]\s*['"]([^'"]+)['"]/i);
+            if (csrfMatch) {
+                token = csrfMatch[1];
+                console.log('Found CSRF token with pattern 4 (JS variable)');
+            }
+        }
+
+        const cookies = response.headers['set-cookie'];
+        console.log('Cookies found:', cookies ? cookies.length : 0);
+        
+        if (!token) {
+            console.log('No CSRF token found. HTML sample:', html.substring(0, 500));
+            // Try to find any input with "token" in the name
+            const tokenInputs = html.match(/<input[^>]*token[^>]*>/gi);
+            console.log('Token-related inputs found:', tokenInputs);
+        }
+        
+        return {
+            token,
+            cookies: cookies ? cookies.join('; ') : null
+        };
+    } catch (error) {
+        console.error('Failed to get CSRF token:', error.message);
+        if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data sample:', error.response.data?.substring(0, 200));
+        }
+        return { token: null, cookies: null };
+    }
+};
+
+// Chartink proxy route for CORS bypass
+app.post('/api/chartink-proxy', async (req, res) => {
+    try {
+        console.log('Chartink proxy request received - raw body:', req.body);
+        
+        // Get the raw form data from request body
+        const formData = req.body;
+        
+        if (!formData || typeof formData !== 'string') {
+            console.log('No formData provided or empty');
+            return res.status(400).json({ error: 'Form data is required' });
+        }
+
+        // Get CSRF token and cookies
+        console.log('Fetching CSRF token from Chartink...');
+        const { token, cookies } = await getChartinkCSRFToken();
+        
+        if (!token) {
+            console.log('Failed to get CSRF token');
+            return res.status(500).json({ error: 'Failed to get CSRF token from Chartink' });
+        }
+
+        console.log('CSRF token obtained:', token.substring(0, 10) + '...');
+
+        // Add CSRF token to form data
+        const formDataWithToken = `${formData}&_token=${encodeURIComponent(token)}`;
+        console.log('Sending request to Chartink with CSRF token');
+
+        const response = await axios({
+            method: 'POST',
+            url: 'https://chartink.com/screener/process',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://chartink.com/screener',
+                'Origin': 'https://chartink.com',
+                'Cookie': cookies || '',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            },
+            data: formDataWithToken,
+            timeout: 15000,
+            validateStatus: function (status) {
+                return status < 500; // Accept all status codes below 500
+            }
+        });
+
+        console.log('Chartink response status:', response.status);
+        console.log('Chartink response data sample:', JSON.stringify(response.data).substring(0, 200));
+
+        res.json(response.data);
+    } catch (error) {
+        console.error('Chartink proxy error details:', {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data
+        });
+        
+        res.status(500).json({ 
+            error: 'Failed to fetch from Chartink',
+            message: error.response?.data || error.message,
+            status: error.response?.status || 'unknown'
+        });
+    }
 });
 
 // Load Swagger documentation
