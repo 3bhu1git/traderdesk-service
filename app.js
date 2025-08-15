@@ -17,6 +17,7 @@ const brokersRoutes = require('./routes/brokers');
 const marketIntelligenceRoutes = require('./routes/marketIntelligence');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
+const chartinkScreenerRoutes = require('./routes/chartinkScreener');
 const WebSocketService = require('./services/websocket');
 const CronService = require('./services/cron');
 const { fetchHistoricalData } = require('./scripts/fetchHistoricalData');
@@ -105,6 +106,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUi
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/brokers', brokersRoutes);
+app.use('/api/chartink-screeners', chartinkScreenerRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/market', marketDataRoutes);

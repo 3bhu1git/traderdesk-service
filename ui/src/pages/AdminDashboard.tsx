@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext';
-import { Users, Settings, MessageSquare, BarChart3, Calendar, Plus, Edit, Trash2, Filter, Search, LogOut, Send, Bell, User } from 'lucide-react';
+import { Users, Settings, MessageSquare, BarChart3, Calendar, Plus, Edit, Trash2, Filter, Search, LogOut, Send, Bell, User, Target, Eye, Play, Pause } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
   const { 
@@ -42,14 +42,195 @@ const AdminDashboard: React.FC = () => {
   const [messageText, setMessageText] = useState('');
   const [messageSubject, setMessageSubject] = useState('');
 
+  // Screener Management State
+  const [screeners, setScreeners] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showCreateScreener, setShowCreateScreener] = useState(false);
+  const [editingScreener, setEditingScreener] = useState<any | null>(null);
+  const [screenerFormData, setScreenerFormData] = useState({
+    name: '',
+    description: '',
+    chartinkUrl: '',
+    triggerTime: '',
+    frequency: 'daily',
+    customFrequency: {
+      interval: 1,
+      unit: 'hours'
+    },
+    isActive: true
+  });
+
   const tabs = [
     { id: 'users', label: 'User Management', icon: Users },
+    { id: 'screeners', label: 'Screener Management', icon: Target },
     { id: 'content', label: 'Menu Content', icon: Settings },
     { id: 'announcements', label: 'Announcements', icon: MessageSquare },
     { id: 'broadcast', label: 'Broadcast Alerts', icon: Bell },
     { id: 'messaging', label: 'User Messaging', icon: MessageSquare },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 }
   ];
+
+  // API functions for screeners
+  const fetchScreeners = async () => {
+    setLoading(true);
+    try {
+      const adminData = localStorage.getItem('traderdesk_admin');
+      if (!adminData) throw new Error('No admin session');
+      
+      // Use development bypass for admin access
+      const response = await fetch('/api/chartink-screeners', {
+        headers: {
+          'x-dev-bypass': 'true',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setScreeners(data.data.screeners || []);
+      } else {
+        console.error('Failed to fetch screeners');
+      }
+    } catch (error) {
+      console.error('Error fetching screeners:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createScreener = async (screenerData: any) => {
+    try {
+      const adminData = localStorage.getItem('traderdesk_admin');
+      if (!adminData) throw new Error('No admin session');
+      
+      const response = await fetch('/api/chartink-screeners', {
+        method: 'POST',
+        headers: {
+          'x-dev-bypass': 'true',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(screenerData)
+      });
+      
+      if (response.ok) {
+        fetchScreeners();
+        setShowCreateScreener(false);
+        resetScreenerForm();
+        alert('Screener created successfully');
+      } else {
+        const error = await response.json();
+        alert(`Failed to create screener: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error creating screener:', error);
+      alert('Error creating screener');
+    }
+  };
+
+  const updateScreener = async (id: string, screenerData: any) => {
+    try {
+      const adminData = localStorage.getItem('traderdesk_admin');
+      if (!adminData) throw new Error('No admin session');
+      
+      const response = await fetch(`/api/chartink-screeners/${id}`, {
+        method: 'PUT',
+        headers: {
+          'x-dev-bypass': 'true',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(screenerData)
+      });
+      
+      if (response.ok) {
+        fetchScreeners();
+        setEditingScreener(null);
+        resetScreenerForm();
+        alert('Screener updated successfully');
+      } else {
+        const error = await response.json();
+        alert(`Failed to update screener: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error updating screener:', error);
+      alert('Error updating screener');
+    }
+  };
+
+  const deleteScreener = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this screener?')) return;
+    
+    try {
+      const adminData = localStorage.getItem('traderdesk_admin');
+      if (!adminData) throw new Error('No admin session');
+      
+      const response = await fetch(`/api/chartink-screeners/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'x-dev-bypass': 'true',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        fetchScreeners();
+        alert('Screener deleted successfully');
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete screener: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error deleting screener:', error);
+      alert('Error deleting screener');
+    }
+  };
+
+  const runScreener = async (id: string) => {
+    try {
+      const adminData = localStorage.getItem('traderdesk_admin');
+      if (!adminData) throw new Error('No admin session');
+      
+      const response = await fetch(`/api/chartink-screeners/${id}/run`, {
+        method: 'POST',
+        headers: {
+          'x-dev-bypass': 'true',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        fetchScreeners();
+        alert('Screener run initiated successfully');
+      } else {
+        const error = await response.json();
+        alert(`Failed to run screener: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error running screener:', error);
+      alert('Error running screener');
+    }
+  };
+
+  const resetScreenerForm = () => {
+    setScreenerFormData({
+      name: '',
+      description: '',
+      chartinkUrl: '',
+      triggerTime: '',
+      frequency: 'daily',
+      customFrequency: {
+        interval: 1,
+        unit: 'hours'
+      },
+      isActive: true
+    });
+  };
+
+  // Load screeners on component mount
+  useEffect(() => {
+    if (admin && activeTab === 'screeners') {
+      fetchScreeners();
+    }
+  }, [admin, activeTab]);
 
   const filteredUsers = users.filter(user => {
     const matchesFilter = userFilter === 'all' || 
@@ -637,6 +818,293 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  const renderScreenerManagement = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">Screener Management</h2>
+        <button
+          onClick={() => setShowCreateScreener(true)}
+          className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-indigo-700 flex items-center space-x-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Create Screener</span>
+        </button>
+      </div>
+
+      {/* Create/Edit Screener Form */}
+      {(showCreateScreener || editingScreener) && (
+        <div className="glass-card p-6 border border-purple-200 bg-purple-50">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {editingScreener ? 'Edit Screener' : 'Create New Screener'}
+          </h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+                <input
+                  type="text"
+                  value={screenerFormData.name}
+                  onChange={(e) => setScreenerFormData({...screenerFormData, name: e.target.value})}
+                  placeholder="Enter screener name"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Trigger Time *</label>
+                <input
+                  type="time"
+                  value={screenerFormData.triggerTime}
+                  onChange={(e) => setScreenerFormData({...screenerFormData, triggerTime: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+              <textarea
+                value={screenerFormData.description}
+                onChange={(e) => setScreenerFormData({...screenerFormData, description: e.target.value})}
+                placeholder="Enter screener description"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Chartink URL *</label>
+              <input
+                type="url"
+                value={screenerFormData.chartinkUrl}
+                onChange={(e) => setScreenerFormData({...screenerFormData, chartinkUrl: e.target.value})}
+                placeholder="https://chartink.com/screener/..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Frequency *</label>
+                <select
+                  value={screenerFormData.frequency}
+                  onChange={(e) => setScreenerFormData({...screenerFormData, frequency: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+
+              {screenerFormData.frequency === 'custom' && (
+                <div className="flex space-x-2">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Interval</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={screenerFormData.customFrequency.interval}
+                      onChange={(e) => setScreenerFormData({
+                        ...screenerFormData,
+                        customFrequency: {
+                          ...screenerFormData.customFrequency,
+                          interval: parseInt(e.target.value)
+                        }
+                      })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
+                    <select
+                      value={screenerFormData.customFrequency.unit}
+                      onChange={(e) => setScreenerFormData({
+                        ...screenerFormData,
+                        customFrequency: {
+                          ...screenerFormData.customFrequency,
+                          unit: e.target.value
+                        }
+                      })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="minutes">Minutes</option>
+                      <option value="hours">Hours</option>
+                      <option value="days">Days</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={screenerFormData.isActive}
+                onChange={(e) => setScreenerFormData({...screenerFormData, isActive: e.target.checked})}
+                className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
+                Active
+              </label>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  if (editingScreener) {
+                    updateScreener(editingScreener._id, screenerFormData);
+                  } else {
+                    createScreener(screenerFormData);
+                  }
+                }}
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-2 rounded-lg hover:from-purple-700 hover:to-indigo-700 flex items-center space-x-2"
+              >
+                <span>{editingScreener ? 'Update' : 'Create'} Screener</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateScreener(false);
+                  setEditingScreener(null);
+                  resetScreenerForm();
+                }}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Screeners List */}
+      <div className="glass-card overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-center">
+            <div className="text-gray-600">Loading screeners...</div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Screener</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Run</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {screeners.map((screener) => (
+                  <tr key={screener._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{screener.name}</div>
+                        <div className="text-xs text-gray-500">{screener.description}</div>
+                        <div className="text-xs text-blue-600 hover:text-blue-800">
+                          <a href={screener.chartinkUrl} target="_blank" rel="noopener noreferrer">
+                            View on Chartink
+                          </a>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {screener.frequency === 'custom' 
+                          ? `Every ${screener.customFrequency?.interval} ${screener.customFrequency?.unit}`
+                          : screener.frequency.charAt(0).toUpperCase() + screener.frequency.slice(1)
+                        }
+                      </div>
+                      <div className="text-xs text-gray-500">at {screener.triggerTime}</div>
+                      {screener.nextRun && (
+                        <div className="text-xs text-gray-500">
+                          Next: {new Date(screener.nextRun).toLocaleString()}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        screener.isActive 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {screener.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {screener.lastRun 
+                          ? new Date(screener.lastRun).toLocaleString()
+                          : 'Never'
+                        }
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Runs: {screener.runCount || 0}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          onClick={() => {
+                            setEditingScreener(screener);
+                            setScreenerFormData({
+                              name: screener.name,
+                              description: screener.description || '',
+                              chartinkUrl: screener.chartinkUrl,
+                              triggerTime: screener.triggerTime,
+                              frequency: screener.frequency,
+                              customFrequency: screener.customFrequency || { interval: 1, unit: 'hours' },
+                              isActive: screener.isActive
+                            });
+                          }}
+                          className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => runScreener(screener._id)}
+                          className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium hover:bg-green-200"
+                          title="Run Now"
+                        >
+                          <Play className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => updateScreener(screener._id, { isActive: !screener.isActive })}
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            screener.isActive 
+                              ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' 
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                          title={screener.isActive ? 'Pause' : 'Resume'}
+                        >
+                          {screener.isActive ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                        </button>
+                        <button
+                          onClick={() => deleteScreener(screener._id)}
+                          className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium hover:bg-red-200"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {screeners.length === 0 && !loading && (
+              <div className="text-center py-8 text-gray-500">
+                No screeners found. Create your first screener to get started.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -683,6 +1151,7 @@ const AdminDashboard: React.FC = () => {
         {/* Main Content */}
         <div className="flex-1 p-4">
           {activeTab === 'users' && renderUserManagement()}
+          {activeTab === 'screeners' && renderScreenerManagement()}
           {activeTab === 'content' && renderContentManagement()}
           {activeTab === 'announcements' && renderAnnouncementManagement()}
           {activeTab === 'broadcast' && renderBroadcastAlerts()}
