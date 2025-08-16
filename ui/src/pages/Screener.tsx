@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Filter, TrendingUp, Zap, BarChart, Download, Terminal, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import PaidUserGuard from '../components/Layout/PaidUserGuard';
-import { DataService } from '../services/DataService';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import StatusBar from '../components/common/StatusBar';
 
@@ -36,9 +35,6 @@ const Screener: React.FC = () => {
   const [topLosers, setTopLosers] = useState<StockData[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
-  
-  // Initialize data service
-  const dataService = DataService.getInstance();
 
   const screenerTabs = [
     { id: 'longterm', label: 'Long Term', icon: TrendingUp },
@@ -51,79 +47,6 @@ const Screener: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('screener_activeTab', activeTab);
   }, [activeTab]);
-
-  useEffect(() => {
-    fetchStockData();
-    
-    // Set up auto-refresh interval (every 5 minutes)
-    const refreshInterval = setInterval(() => {
-      fetchStockData();
-    }, 5 * 60 * 1000);
-    
-    // Add visibility change listener to pause/resume fetching
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchStockData();
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      clearInterval(refreshInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  const fetchStockData = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      // Fetch top gainers and losers using the data service
-      const [gainersData, losersData] = await Promise.all([
-        dataService.getTopGainers(10),
-        dataService.getTopLosers(10)
-      ]);
-      
-      // Convert to StockData format with additional analysis
-      const gainers: StockData[] = gainersData.map(stock => ({
-        symbol: stock.symbol,
-        name: stock.name,
-        price: stock.price,
-        change: stock.change,
-        changePercent: stock.changePercent,
-        marketCap: stock.marketCap ? `${(stock.marketCap / 100000).toFixed(1)}L Cr` : undefined,
-        pe: stock.pe || stock.peRatio,
-        score: Math.floor(Math.random() * 30 + 70), // High scores for gainers
-        recommendation: 'Strong Buy',
-        volume: `${(Math.random() * 5 + 1).toFixed(1)}x`,
-        rsi: Math.random() * 20 + 70 // High RSI for gainers
-      }));
-      
-      const losers: StockData[] = losersData.map(stock => ({
-        symbol: stock.symbol,
-        name: stock.name,
-        price: stock.price,
-        change: stock.change,
-        changePercent: stock.changePercent,
-        marketCap: stock.marketCap ? `${(stock.marketCap / 100000).toFixed(1)}L Cr` : undefined,
-        pe: stock.pe || stock.peRatio,
-        score: Math.floor(Math.random() * 30 + 40), // Lower scores for losers
-        recommendation: 'Hold',
-        volume: `${(Math.random() * 5 + 1).toFixed(1)}x`,
-        rsi: Math.random() * 20 + 30 // Low RSI for losers
-      }));
-      
-      setTopGainers(gainers);
-      setTopLosers(losers);
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error('Error fetching stock data:', error);
-      setError('Failed to fetch stock data. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const longtermStocks = topGainers.slice(0, 4).map(stock => ({
     ...stock,
@@ -201,10 +124,10 @@ const Screener: React.FC = () => {
           <Terminal className="w-8 h-8 text-red-400 mb-2" />
           <p className="text-slate-400 font-mono text-center">{error}</p>
           <button
-            onClick={fetchStockData}
+            onClick={() => setError(null)}
             className="mt-4 px-3 py-1 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-300 hover:bg-slate-700/60 text-xs"
           >
-            Try Again
+            Dismiss
           </button>
         </div>
       ) : (
@@ -345,10 +268,10 @@ const Screener: React.FC = () => {
           <Terminal className="w-8 h-8 text-red-400 mb-2" />
           <p className="text-slate-400 font-mono text-center">{error}</p>
           <button
-            onClick={fetchStockData}
+            onClick={() => setError(null)}
             className="mt-4 px-3 py-1 bg-slate-800/60 border border-slate-600/50 rounded-sm text-slate-300 hover:bg-slate-700/60 text-xs"
           >
-            Try Again
+            Dismiss
           </button>
         </div>
       ) : (

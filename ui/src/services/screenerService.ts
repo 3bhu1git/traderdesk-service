@@ -33,7 +33,8 @@ export interface UIScreenerData {
 }
 
 class ScreenerService {
-  private static baseUrl = '/api/screeners';
+  // Change baseUrl to match actual backend structure
+  private static baseUrl = '/screeners'; // Remove /api prefix
 
   static async getScreeners(params: { page?: number; limit?: number; isActive?: boolean } = {}) {
     try {
