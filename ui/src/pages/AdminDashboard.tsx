@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext';
 import ChartinkService from '../services/chartinkService';
+import ScreenerService, { ScreenerData } from '../services/screenerService';
 import { 
   Users, Settings, MessageSquare, BarChart3, Plus, Edit, Trash2, Filter, Search, 
   LogOut, Send, Bell, User, Target, Play, Clock, 
@@ -9,25 +10,31 @@ import {
 } from 'lucide-react';
 
 interface Screener {
-  id: string;
+  _id: string;
   name: string;
   description?: string;
-  formData: string;
-  isActive: boolean;
-  schedule: {
-    interval: number; // minutes
-    startTime: string; // HH:MM
-    endTime: string; // HH:MM
-    enabled: boolean;
+  chartinkUrl: string;
+  triggerTime: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'custom';
+  customFrequency?: {
+    interval: number;
+    unit: 'minutes' | 'hours' | 'days';
   };
-  tags: string[];
-  createdAt: Date;
+  isActive: boolean;
   lastRun?: Date;
   nextRun?: Date;
-  executionCount: number;
-  successCount: number;
-  failureCount: number;
-  results?: any[];
+  runCount: number;
+  createdAt: Date;
+  updatedAt?: Date;
+  // UI-specific fields for display
+  formData?: string;
+  tags?: string[];
+  schedule?: {
+    interval: number;
+    startTime: string;
+    endTime: string;
+    enabled: boolean;
+  };
 }
 
 const AdminDashboard: React.FC = () => {
@@ -105,77 +112,54 @@ const AdminDashboard: React.FC = () => {
     { id: 'analytics', label: 'Analytics', icon: BarChart3 }
   ];
 
-  // Mock screener data for demo
+  // Load screeners from API
   useEffect(() => {
     if (activeTab === 'screeners') {
-      setLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setScreeners([
-          {
-            id: '1',
-            name: 'High Volume Breakout',
-            description: 'Stocks breaking out with high volume above 10M',
-            formData: 'max_rows=160&scan_clause=volume%20%3E%2010000000%20and%20close%20%3E%20sma(close%2C20)',
-            isActive: true,
-            schedule: {
-              interval: 30,
-              startTime: '09:15',
-              endTime: '15:30',
-              enabled: true
-            },
-            tags: ['volume', 'breakout', 'momentum'],
-            createdAt: new Date('2024-01-15'),
-            lastRun: new Date(),
-            executionCount: 25,
-            successCount: 23,
-            failureCount: 2
-          },
-          {
-            id: '2',
-            name: 'RSI Oversold Recovery',
-            description: 'Stocks showing RSI oversold recovery signals',
-            formData: 'max_rows=100&scan_clause=rsi(14)%20%3C%2030%20and%20close%20%3E%20open',
-            isActive: false,
-            schedule: {
-              interval: 60,
-              startTime: '10:00',
-              endTime: '14:30',
-              enabled: false
-            },
-            tags: ['rsi', 'oversold', 'recovery'],
-            createdAt: new Date('2024-01-10'),
-            lastRun: new Date(Date.now() - 86400000),
-            executionCount: 15,
-            successCount: 14,
-            failureCount: 1
-          }
-        ]);
-        setLoading(false);
-      }, 1000);
+      loadScreeners();
     }
   }, [activeTab]);
+
+  const loadScreeners = async () => {
+    try {
+      setLoading(true);
+      const response = await ScreenerService.getScreeners({ page: 1, limit: 100 });
+      
+      if (response.success && response.data.screeners) {
+        // Convert API format to UI format
+        const uiScreeners = response.data.screeners.map((screener: ScreenerData) => ({
+          ...screener,
+          ...ScreenerService.convertFromApiFormat(screener),
+        })) as Screener[];
+        
+        setScreeners(uiScreeners);
+      }
+    } catch (error) {
+      console.error('Error loading screeners:', error);
+      setScreeners([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // API functions for screeners
   const createScreener = async () => {
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      const newScreener: Screener = {
-        id: Date.now().toString(),
-        ...screenerFormData,
-        createdAt: new Date(),
-        executionCount: 0,
-        successCount: 0,
-        failureCount: 0
-      };
+      // Convert UI form data to API format
+      const apiData = ScreenerService.convertToApiFormat(screenerFormData);
       
-      setScreeners(prev => [...prev, newScreener]);
-      setShowCreateScreener(false);
-      resetScreenerForm();
-      console.log('Screener created successfully');
+      const response = await ScreenerService.createScreener(apiData);
+      
+      if (response.success && response.data?.screener) {
+        // Reload screeners to get updated data
+        await loadScreeners();
+        setShowCreateScreener(false);
+        resetScreenerForm();
+        console.log('Screener created successfully');
+      } else {
+        console.error('Failed to create screener:', response.message);
+      }
     } catch (error) {
       console.error('Error creating screener:', error);
     } finally {
@@ -186,15 +170,21 @@ const AdminDashboard: React.FC = () => {
   const updateScreener = async (id: string) => {
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      setScreeners(prev => prev.map(s => 
-        s.id === id ? { ...s, ...screenerFormData } : s
-      ));
-      setEditingScreener(null);
-      resetScreenerForm();
-      console.log('Screener updated successfully');
+      // Convert UI form data to API format
+      const apiData = ScreenerService.convertToApiFormat(screenerFormData);
+      
+      const response = await ScreenerService.updateScreener(id, apiData);
+      
+      if (response.success && response.data?.screener) {
+        // Reload screeners to get updated data
+        await loadScreeners();
+        setEditingScreener(null);
+        resetScreenerForm();
+        console.log('Screener updated successfully');
+      } else {
+        console.error('Failed to update screener:', response.message);
+      }
     } catch (error) {
       console.error('Error updating screener:', error);
     } finally {
@@ -207,11 +197,16 @@ const AdminDashboard: React.FC = () => {
     
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      setScreeners(prev => prev.filter(s => s.id !== id));
-      console.log('Screener deleted successfully');
+      const response = await ScreenerService.deleteScreener(id);
+      
+      if (response.success) {
+        // Reload screeners to get updated data
+        await loadScreeners();
+        console.log('Screener deleted successfully');
+      } else {
+        console.error('Failed to delete screener:', response.message);
+      }
     } catch (error) {
       console.error('Error deleting screener:', error);
     } finally {
@@ -222,18 +217,18 @@ const AdminDashboard: React.FC = () => {
   const runScreener = async (id: string) => {
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      setScreeners(prev => prev.map(s => 
-        s.id === id ? { 
-          ...s, 
-          lastRun: new Date(),
-          executionCount: s.executionCount + 1,
-          successCount: s.successCount + 1
-        } : s
-      ));
-      console.log('Screener executed successfully');
+      const response = await ScreenerService.runScreener(id);
+      
+      if (response.success && response.data) {
+        // Show success feedback
+        console.log('Screener executed successfully');
+        
+        // Reload screeners to get updated data
+        await loadScreeners();
+      } else {
+        console.error('Failed to run screener:', response.message);
+      }
     } catch (error) {
       console.error('Error running screener:', error);
     } finally {
@@ -522,11 +517,9 @@ const AdminDashboard: React.FC = () => {
           <p className="text-slate-400 text-sm md:text-base font-mono">Manage Chartink screeners and automated execution</p>
         </div>
         <div className="flex items-center space-x-3">
+          {/* Refresh button */}
           <button
-            onClick={() => {
-              setLoading(true);
-              setTimeout(() => setLoading(false), 1000);
-            }}
+            onClick={loadScreeners}
             disabled={loading}
             className="p-2 hover:bg-slate-700/50 rounded-sm transition-colors"
             title="Refresh screeners"
@@ -971,28 +964,31 @@ const AdminDashboard: React.FC = () => {
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
                       <div>
-                        <span className="text-slate-500">Schedule:</span>
-                        <div className="text-slate-300">Every {screener.schedule.interval}m</div>
-                        <div className="text-slate-400">{screener.schedule.startTime} - {screener.schedule.endTime}</div>
+                        <span className="text-slate-500">Frequency:</span>
+                        <div className="text-slate-300">{screener.frequency}</div>
+                        <div className="text-slate-400">at {screener.triggerTime}</div>
                       </div>
                       <div>
                         <span className="text-slate-500">Executions:</span>
-                        <div className="text-slate-300">{screener.executionCount}</div>
+                        <div className="text-slate-300">{screener.runCount || 0}</div>
+                        <div className="text-slate-400">total runs</div>
                       </div>
                       <div>
-                        <span className="text-slate-500">Success Rate:</span>
-                        <div className="text-green-400">
-                          {screener.executionCount > 0 
-                            ? Math.round((screener.successCount / screener.executionCount) * 100)
-                            : 0
-                          }%
+                        <span className="text-slate-500">Status:</span>
+                        <div className={screener.isActive ? 'text-green-400' : 'text-red-400'}>
+                          {screener.isActive ? 'Active' : 'Inactive'}
                         </div>
                       </div>
                       <div>
                         <span className="text-slate-500">Last Run:</span>
                         <div className="text-slate-300">
                           {screener.lastRun 
-                            ? screener.lastRun.toLocaleString()
+                            ? new Date(screener.lastRun).toLocaleString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
                             : 'Never'
                           }
                         </div>
@@ -1004,14 +1000,8 @@ const AdminDashboard: React.FC = () => {
                     <button
                       onClick={() => {
                         setEditingScreener(screener);
-                        setScreenerFormData({
-                          name: screener.name,
-                          description: screener.description || '',
-                          formData: screener.formData,
-                          tags: screener.tags,
-                          schedule: screener.schedule,
-                          isActive: screener.isActive
-                        });
+                        const formData = ScreenerService.convertFromApiFormat(screener);
+                        setScreenerFormData(formData);
                       }}
                       className="p-2 hover:bg-slate-700/50 rounded-sm transition-colors text-slate-400 hover:text-blue-400"
                       title="Edit screener"
@@ -1020,7 +1010,7 @@ const AdminDashboard: React.FC = () => {
                     </button>
                     
                     <button
-                      onClick={() => runScreener(screener.id)}
+                      onClick={() => runScreener(screener._id)}
                       disabled={loading}
                       className="p-2 hover:bg-slate-700/50 rounded-sm transition-colors text-slate-400 hover:text-green-400 disabled:opacity-50"
                       title="Run now"
@@ -1029,7 +1019,7 @@ const AdminDashboard: React.FC = () => {
                     </button>
                     
                     <button
-                      onClick={() => deleteScreener(screener.id)}
+                      onClick={() => deleteScreener(screener._id)}
                       disabled={loading}
                       className="p-2 hover:bg-slate-700/50 rounded-sm transition-colors text-slate-400 hover:text-red-400 disabled:opacity-50"
                       title="Delete screener"
